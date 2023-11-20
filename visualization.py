@@ -4,6 +4,9 @@ import numpy as np
 from matplotlib import pyplot as plt
 from scipy.stats import multivariate_normal
 import string
+from matplotlib.patches import Ellipse
+from helper import cov_mat_generation
+import torch
 
 def get_cmap(n, name='hsv'):
     '''Returns a function that maps each index in 0, 1, ..., n-1 to a distinct 
@@ -25,19 +28,23 @@ def plot_trajecotries(true_trajectories,pred_trajectories,pred_trajectories_Soci
         num_veh = 0
    
 
-    plt.figure()
-    plt.xlabel("x (m)", fontsize=12)
-    plt.ylabel("y (m)", fontsize=12)
-    plt.xticks(fontsize=12)
-    plt.yticks(fontsize=12)
+    fig, ax = plt.subplots()
+    plt.ion()
+    ax.set_xlabel("x (m)", fontsize=12)
+    ax.set_ylabel("y (m)", fontsize=12)
+    ax.tick_params(axis='x', labelsize=12)
+    ax.tick_params(axis='y', labelsize=12)
 
     min_x = pred_trajectories[:,:,0].min() - 10
     max_x = pred_trajectories[:,:,0].max() + 10
     min_y = pred_trajectories[:,:,1].min() - 10
     max_y = pred_trajectories[:,:,1].max() + 10
 
-    plt.xlim(min_x, max_x)
-    plt.ylim(min_y, max_y)
+    ax.set_xlim(min_x, max_x)
+    ax.set_ylim(min_y, max_y)
+
+    cov_matrix = cov_mat_generation(dist_param_seq)
+    # print('cov_matrix.shape: ', cov_matrix.shape)
 
 
     for agent_index in range(num_ped): # for each agent plotting its trajecotry for the frames the agent is present
@@ -57,7 +64,7 @@ def plot_trajecotries(true_trajectories,pred_trajectories,pred_trajectories_Soci
                 obs_frame_nums.append(frame)
 
         pred_frame_nums = []
-        for frame in range(obs_len-1,seq_len):
+        for frame in range(obs_len,seq_len):
             if agent_id in PedsList_seq[frame]:
                 pred_frame_nums.append(frame)
 
@@ -69,41 +76,45 @@ def plot_trajecotries(true_trajectories,pred_trajectories,pred_trajectories_Soci
         # prediction of CollisionGrid
         for f in pred_frame_nums:
             marker_size = min_size + ((max_size-min_size)/seq_len * f)
-            plt.plot(pred_trajectories[f,agent_index,0], pred_trajectories[f,agent_index,1],
-                      c='b', ls=":", marker='d', markersize=marker_size)
-        plt.plot(pred_trajectories[pred_frame_nums,agent_index,0], pred_trajectories[pred_frame_nums,agent_index,1],
+            # ax.plot(pred_trajectories[f,agent_index,0], pred_trajectories[f,agent_index,1],
+            #           c='b', ls=":", marker='d', markersize=marker_size)
+            # plot also the current positions 1,2,3 sigma confidence interval
+            mean = dist_param_seq[f,agent_index,:2]
+            cov = cov_matrix[f,agent_index]
+            plot_bivariate_gaussian3(mean, cov, ax, 1)
+        ax.plot(pred_trajectories[pred_frame_nums,agent_index,0], pred_trajectories[pred_frame_nums,agent_index,1],
                   c='b', ls="-", linewidth=1.0)
         
-    
-        # prediction of SocialLSTM
-        for f in pred_frame_nums:
-            marker_size = min_size + ((max_size-min_size)/seq_len * f)
-            plt.plot(pred_trajectories_SocialLSTM[f,agent_index,0], pred_trajectories_SocialLSTM[f,agent_index,1],
-                      c='r', ls=":", marker='^', markersize=marker_size)
-        plt.plot(pred_trajectories_SocialLSTM[pred_frame_nums,agent_index,0], pred_trajectories_SocialLSTM[pred_frame_nums,agent_index,1],
-                  c='r', ls="-", linewidth=1.0)
 
-        # prediction of Vanilla LSTM
-        for f in pred_frame_nums:
-            marker_size = min_size + ((max_size-min_size)/seq_len * f)
-            plt.plot(pred_trajectories_VLSTM[f,agent_index,0], pred_trajectories_VLSTM[f,agent_index,1],
-                      c='g', ls=":", marker='p', markersize=marker_size)
-        plt.plot(pred_trajectories_VLSTM[pred_frame_nums,agent_index,0], pred_trajectories_VLSTM[pred_frame_nums,agent_index,1], 
-                    c='g', ls="-", linewidth=1.0) 
+        # # prediction of SocialLSTM
+        # for f in pred_frame_nums:
+        #     marker_size = min_size + ((max_size-min_size)/seq_len * f)
+        #     plt.plot(pred_trajectories_SocialLSTM[f,agent_index,0], pred_trajectories_SocialLSTM[f,agent_index,1],
+        #               c='r', ls=":", marker='^', markersize=marker_size)
+        # plt.plot(pred_trajectories_SocialLSTM[pred_frame_nums,agent_index,0], pred_trajectories_SocialLSTM[pred_frame_nums,agent_index,1],
+        #           c='r', ls="-", linewidth=1.0)
 
-        # prediction of LR
-        for f in pred_frame_nums[1:]:
-            marker_size = min_size + ((max_size-min_size)/seq_len * f)
-            plt.plot(pred_trajectories_LR[f,agent_index,0], pred_trajectories_LR[f,agent_index,1],
-                      c='y', ls=":", marker='P', markersize=marker_size)
-        plt.plot(pred_trajectories_LR[pred_frame_nums,agent_index,0], pred_trajectories_LR[pred_frame_nums,agent_index,1],
-                  c='y', ls="-", linewidth=1.0) 
+        # # prediction of Vanilla LSTM
+        # for f in pred_frame_nums:
+        #     marker_size = min_size + ((max_size-min_size)/seq_len * f)
+        #     plt.plot(pred_trajectories_VLSTM[f,agent_index,0], pred_trajectories_VLSTM[f,agent_index,1],
+        #               c='g', ls=":", marker='p', markersize=marker_size)
+        # plt.plot(pred_trajectories_VLSTM[pred_frame_nums,agent_index,0], pred_trajectories_VLSTM[pred_frame_nums,agent_index,1], 
+        #             c='g', ls="-", linewidth=1.0) 
+
+        # # prediction of LR
+        # for f in pred_frame_nums[1:]:
+        #     marker_size = min_size + ((max_size-min_size)/seq_len * f)
+        #     plt.plot(pred_trajectories_LR[f,agent_index,0], pred_trajectories_LR[f,agent_index,1],
+        #               c='y', ls=":", marker='P', markersize=marker_size)
+        # plt.plot(pred_trajectories_LR[pred_frame_nums,agent_index,0], pred_trajectories_LR[pred_frame_nums,agent_index,1],
+        #           c='y', ls="-", linewidth=1.0) 
         
         
         ### Ground truth:
         alpha_val = 1.0 # transparancy value
         all_frame = obs_frame_nums + pred_frame_nums
-        plt.plot(true_trajectories[all_frame,agent_index,0], true_trajectories[all_frame,agent_index,1],
+        ax.plot(true_trajectories[all_frame,agent_index,0], true_trajectories[all_frame,agent_index,1],
                   c='0.0', linewidth=2.0, alpha=alpha_val)
 
       
@@ -121,9 +132,9 @@ def plot_trajecotries(true_trajectories,pred_trajectories,pred_trajectories_Soci
             if veh_id in VehsList_seq[frame]:
                 pres_frame_nums.append(frame)
                 marker_size = min_size_veh + ((max_size_veh-min_size_veh)/seq_len * frame)
-                plt.plot(true_trajectories_veh[frame,veh_ind,0], true_trajectories_veh[frame,veh_ind,1], 
+                ax.plot(true_trajectories_veh[frame,veh_ind,0], true_trajectories_veh[frame,veh_ind,1], 
                          c='0.3', marker='o', markersize=marker_size)
-        plt.plot(true_trajectories_veh[pres_frame_nums,veh_ind,0], true_trajectories_veh[pres_frame_nums,veh_ind,1], 
+        ax.plot(true_trajectories_veh[pres_frame_nums,veh_ind,0], true_trajectories_veh[pres_frame_nums,veh_ind,1], 
                  c='0.3', linewidth=2.0)
 
     
@@ -144,15 +155,15 @@ def plot_trajecotries(true_trajectories,pred_trajectories,pred_trajectories_Soci
             label = "Ped " + alphabet[indx]
             if indx == ego_agent_indx_in_pedlist: # This is our ego agent for which we want to plot its neighbours
                 ego_agent = agent_i # index number of the ego agent in the trajectroy data tesnor of the sequence 
-                plt.plot(pred_trajectories[frame_i, agent_i,0], pred_trajectories[frame_i, agent_i,1], 
+                ax.plot(pred_trajectories[frame_i, agent_i,0], pred_trajectories[frame_i, agent_i,1], 
                          color='b', marker="*", markersize=11)
             
             elif (any(grid_seq[frame_i][ego_agent_indx_in_pedlist,indx,:])): # This agent is in the grid of the ego agent.
-                plt.plot(pred_trajectories[frame_i, agent_i,0], pred_trajectories[frame_i, agent_i,1], 
+                ax.plot(pred_trajectories[frame_i, agent_i,0], pred_trajectories[frame_i, agent_i,1], 
                          color='b', marker="s", markersize=7)
               
             else: # This agent is presnet but not in the gird of the ego agent
-                plt.plot(pred_trajectories[frame_i, agent_i,0], pred_trajectories[frame_i, agent_i,1], 
+                ax.plot(pred_trajectories[frame_i, agent_i,0], pred_trajectories[frame_i, agent_i,1], 
                          markerfacecolor='none', markeredgecolor='b', marker="s", markersize=7)
             
 
@@ -165,23 +176,48 @@ def plot_trajecotries(true_trajectories,pred_trajectories,pred_trajectories_Soci
                          color='0.3', marker="s", markersize=7)
            
             else: # This agent is presnet but not in the gird of the ego agent
-                plt.plot(true_trajectories_veh[frame_i, agent_i,0], true_trajectories_veh[frame_i, agent_i,1], 
+                ax.plot(true_trajectories_veh[frame_i, agent_i,0], true_trajectories_veh[frame_i, agent_i,1], 
                          markerfacecolor='none', markeredgecolor='0.3', marker="s", markersize=7)
                
 
     # legends
-    plt.plot(-100,-100, c='b', marker='d', label='Collision Grid')
-    plt.plot(-100,-100, c='r', marker='^', label='Social LSTM')
-    plt.plot(-100,-100, c='g', marker='p', label='Vanilla LSTM')
-    plt.plot(-100,-100, c='y', marker='P', label='Linear Regression')
-    plt.plot(-100,-100, c='0.0', marker='_', label='Ground truth')
-    plt.legend(loc="lower right", prop={'size': 13}, ncol=1)
+    ax.plot(-100,-100, c='b', marker='d', label='Collision Grid')
+    # ax.plot(-100,-100, c='r', marker='^', label='Social LSTM')
+    # ax.plot(-100,-100, c='g', marker='p', label='Vanilla LSTM')
+    # ax.plot(-100,-100, c='y', marker='P', label='Linear Regression')
+    ax.plot(-100,-100, c='0.0', marker='_', label='Ground truth')
+    ax.legend(loc="lower right", prop={'size': 13}, ncol=1)
+
+    # plt.show()
+    # plt.pause(100)
+
     
     if is_train:
         plt.savefig("Store_Results/plot/train/plt/compare/%d.png"%batch, dpi=200)
     else:
         plt.savefig("Store_Results/plot/test/plt/compare/%d.png"%batch, dpi=200)
     plt.close()
+
+
+def plot_bivariate_gaussian3(mean, cov, ax, max_nstd=3):
+
+    def eigsorted(cov):
+        vals, vecs = np.linalg.eigh(cov)
+        order = vals.argsort()[::-1]
+        return vals[order], vecs[:,order]
+
+    vals, vecs = eigsorted(cov)
+    theta = np.degrees(np.arctan2(*vecs[:,0][::-1]))
+
+    for j in range(1, max_nstd+1):
+
+        # Width and height are "full" widths, not radius
+        width, height = 2 * j * np.sqrt(vals)
+        ellip = Ellipse(xy=mean, width=width, height=height, angle=theta, edgecolor='b', fill=False)
+
+        ax.add_artist(ellip)
+ 
+    return ellip
 
 
 def Loss_Plot(train_batch_num, error_batch, loss_batch, file_name, x_axis_label):
@@ -204,7 +240,9 @@ def Loss_Plot(train_batch_num, error_batch, loss_batch, file_name, x_axis_label)
 def main():
 
 
-    file_path_collisionGrid = "Store_Results/plot/test/CollisionGrid/test_results.pkl"
+    # file_path_collisionGrid = "Store_Results/plot/test/CollisionGrid/test_results.pkl"
+    file_path_collisionGrid = "Store_Results/plot/test/test_results.pkl"
+
     file_path_SocialLSTM = "Store_Results/plot/test/SocialLSTM/test_results.pkl"
     file_path_VLSTM = "Store_Results/plot/test/VLSTM/test_results.pkl"
     file_path_LR = "Store_Results/plot/test/LR/test_results.pkl"
@@ -262,6 +300,9 @@ def main():
         pred_trajectories_LR = results_LR_i[1]
 
 
+        # covnert dist_param_seq to a torch tensor
+        dist_param_seq = torch.from_numpy(dist_param_seq)
+        
         plot_trajecotries(true_trajectories,pred_trajectories,pred_trajectories_SocialLSTM,
                           pred_trajectories_VLSTM,pred_trajectories_LR,obs_length,i,
                           dist_param_seq,PedsList_seq,lookup_seq,true_trajectories_veh,

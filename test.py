@@ -41,11 +41,11 @@ def main():
 
     # Model to be loaded (saved model (the epoch #) during training
     # with the best performace according to previous invesigation on valiquation set)
-    parser.add_argument('--epoch', type=int, default=181,
+    parser.add_argument('--epoch', type=int, default= 196, # 181, 3, 196
                             help='Epoch of model to be loaded')
     
     # The number of samples to be generated for each test data, when reporting its performance
-    parser.add_argument('--sample_size', type=int, default=21,
+    parser.add_argument('--sample_size', type=int, default=20,
                             help='The number of sample trajectory that will be generated')
         
 
@@ -64,7 +64,8 @@ def main():
     elif sample_args.method == 3:
         save_directory = os.path.join(save_directory_pre, 'VanillaLSTM/')
     elif sample_args.method == 4:
-        save_directory = os.path.join(save_directory_pre, 'CollisionGrid/')
+        # save_directory = os.path.join(save_directory_pre, 'CollisionGrid/')
+        save_directory = save_directory_pre
     else:
         raise ValueError('The selected method is not defined!')
 
@@ -90,6 +91,10 @@ def main():
     iteration_collision_percent = []
     iteration_collision_percent_pedped = []
     iteration_collision_percent_pedveh = []
+    iteration_NLL_list = []
+    iteration_ESV_sigma1 = []
+    iteration_ESV_sigma2 = []
+    iteration_ESV_sigma3 = []
     
     smallest_err = 100000
     smallest_err_iter_num = -1
@@ -98,7 +103,8 @@ def main():
     # in that case uncomment line 101 and comment line 102
     # This iteration is for testing the results for different stages of the trained model
     # (the stored paramters of the model at different iterations)
-    for iteration in [0]: # range(0, sample_args.iteration): 
+    start_iteration = 0
+    for iteration in [0]: # range(start_iteration, sample_args.iteration): 
         # Initialize net
         net = get_model(sample_args.method, saved_args, True)
 
@@ -133,6 +139,12 @@ def main():
         num_collision_hetero = 0
         all_num_cases_hetero = 0
 
+        NLL_list = []
+        ESV_sigma1 = 0
+        ESV_sigma2 = 0
+        ESV_sigma3 = 0
+        data_point_num = 0
+
 
         x_WholeBatch, numPedsList_WholeBatch, PedsList_WholeBatch, x_veh_WholeBatch, numVehsList_WholeBatch,\
             VehsList_WholeBatch, grids_WholeBatch, grids_veh_WholeBatch, grids_TTC_WholeBatch, grids_TTC_veh_WholeBatch \
@@ -151,8 +163,8 @@ def main():
 
             
             # dense vector creation
-            x_seq, lookup_seq = dataloader.convert_proper_array(x_seq, numPedsList_seq, PedsList_seq)
-            x_seq_veh, lookup_seq_veh = dataloader.convert_proper_array(x_seq_veh, numVehsList_seq, VehsList_seq, veh_flag=True)
+            x_seq, lookup_seq, _ = dataloader.convert_proper_array(x_seq, numPedsList_seq, PedsList_seq)
+            x_seq_veh, lookup_seq_veh, _ = dataloader.convert_proper_array(x_seq_veh, numVehsList_seq, VehsList_seq, veh_flag=True)
 
             # will be used for error calculation
             orig_x_seq = x_seq.clone() 
@@ -197,6 +209,12 @@ def main():
             sample_num_coll_homo = []
             sample_all_num_cases_homo = []
             sample_all_num_cases_hetero = []
+            sample_NLL = []
+            sample_NLL_loss = []
+            sample_ESV_sigma1 = []
+            sample_ESV_sigma2 = []
+            sample_ESV_sigma3 = []
+
 
             for sample_num in range(sample_args.sample_size):
 
@@ -274,6 +292,17 @@ def main():
                                                                                                 x_seq_veh[sample_args.obs_length:,:,:2].cpu().data,
                                                                                                 VehsList_seq[sample_args.obs_length:], 
                                                                                                 lookup_seq_veh, saved_args.D_min_veh)
+                sample_NLL_list_batch, sample_NLL_loss_batch = get_mean_NLL(dist_param_seq[sample_args.obs_length:,:,:].data,
+                                                                            orig_x_seq[sample_args.obs_length:,:,:2].data,
+                                                                            PedsList_seq[sample_args.obs_length:], 
+                                                                            PedsList_obs, False, lookup_seq)
+                
+                sample_ESV_sigma1_batch, sample_ESV_sigma2_batch, sample_ESV_sigma3_batch, counter = Delta_Empirical_Sigma_Value(
+                                                                                                        dist_param_seq[sample_args.obs_length:,:,:].data,
+                                                                                                        orig_x_seq[sample_args.obs_length:,:,:2].data,
+                                                                                                        PedsList_seq[sample_args.obs_length:], PedsList_obs,
+                                                                                                        False, lookup_seq)
+        
 
                 sample_error.append(sample_error_batch)
                 sample_final_error.append(sample_final_error_batch)
@@ -286,11 +315,20 @@ def main():
                 sample_all_num_cases_homo.append(sample_all_num_cases_homo_batch)
                 sample_num_coll_hetero.append(sample_num_coll_hetero_batch)
                 sample_all_num_cases_hetero.append(sample_all_num_cases_hetero_batch)
+                sample_NLL.append(sample_NLL_list_batch)
+                sample_NLL_loss.append(sample_NLL_loss_batch)
+                sample_ESV_sigma1.append(sample_ESV_sigma1_batch)
+                sample_ESV_sigma2.append(sample_ESV_sigma2_batch)
+                sample_ESV_sigma3.append(sample_ESV_sigma3_batch)
+
                 
 
             # Deciding the best sample based on the average displacement error
-            min_ADE = min(sample_error)
-            min_index = sample_error.index(min_ADE)
+            # We don't get the best sample of each individual. We get the best sample of all the agents in one batch (kind of average). This is a limitation
+            # min_ADE = min(sample_error)
+            # min_index = sample_error.index(min_ADE)
+            min_NLL = min(sample_NLL_loss)
+            min_index = sample_NLL_loss.index(min_NLL)
 
             total_error += sample_error[min_index] # or min_ADE
             final_error += sample_final_error[min_index]
@@ -301,6 +339,11 @@ def main():
             all_num_cases_homo += sample_all_num_cases_homo[min_index]
             num_collision_hetero += sample_num_coll_hetero[min_index]
             all_num_cases_hetero += sample_all_num_cases_hetero[min_index]
+            NLL_list.extend(sample_NLL[min_index]) # getting the correct list of NLLs and adding that to the bigger list that contains different batches
+            ESV_sigma1 += sample_ESV_sigma1[min_index]
+            ESV_sigma2 += sample_ESV_sigma2[min_index]
+            ESV_sigma3 += sample_ESV_sigma3[min_index]
+            data_point_num += counter
 
 
             end = time.time()
@@ -330,6 +373,10 @@ def main():
         iteration_collision_percent.append((num_collision_homo+num_collision_hetero)/(all_num_cases_homo+all_num_cases_hetero))
         iteration_collision_percent_pedped.append(num_collision_homo/all_num_cases_homo)
         iteration_collision_percent_pedveh.append(num_collision_hetero/all_num_cases_hetero)
+        iteration_NLL_list.append(NLL_list)
+        iteration_ESV_sigma1.append((ESV_sigma1/data_point_num)-0.68)
+        iteration_ESV_sigma2.append((ESV_sigma2/data_point_num)-0.95)
+        iteration_ESV_sigma3.append((ESV_sigma3/data_point_num)-0.997)
         
         print('Iteration:' ,iteration+1,' Total testing (prediction sequence) mean error of the model is ', total_error / dataloader.num_batches) 
         print('Iteration:' ,iteration+1,'Total testing final error of the model is ', final_error / dataloader.num_batches)
@@ -341,16 +388,33 @@ def main():
         print('Iteration:' ,iteration+1,'Percentage of collision between pedestrians of the model is ', iteration_collision_percent_pedped[-1])
         print('Iteration:' ,iteration+1,'Percentage of collision between pedestrians and vehicles of the model is ',
                                                                                      iteration_collision_percent_pedveh[-1])
+        # calculate the mean and std for the NLL_list
+        # check the lenght of the list. It should be 1081!
+        NLL_mean, NLL_std = calculate_mean_and_std(NLL_list)
+        print('Iteration:' ,iteration+1,'NLL of the model is ', NLL_mean, 'with std of ', NLL_std)
+        print('Iteration:' ,iteration+1,'ESV_sigma1 of the model is ', (ESV_sigma1 / data_point_num)-0.68)
+        print('Iteration:' ,iteration+1,'ESV_sigma2 of the model is ', (ESV_sigma2 / data_point_num)-0.95)
+        print('Iteration:' ,iteration+1,'ESV_sigma3 of the model is ', (ESV_sigma3  /data_point_num)-0.977)
+
         # print('None count for MHD calculation:', None_count)
 
         
-        if total_error<smallest_err:
+        # if total_error<smallest_err:
+        #     print("**********************************************************")
+        #     print('Best iteration has been changed. Previous best iteration: ', smallest_err_iter_num+1, 'Error: ',
+        #            smallest_err / dataloader.num_batches)
+        #     print('New best iteration : ', iteration+1, 'Error: ',total_error / dataloader.num_batches)
+        #     smallest_err_iter_num = iteration
+        #     smallest_err = total_error
+
+        # using the NLL for deciding on the best model/iteration
+        if NLL_mean<smallest_err:
             print("**********************************************************")
             print('Best iteration has been changed. Previous best iteration: ', smallest_err_iter_num+1, 'Error: ',
-                   smallest_err / dataloader.num_batches)
-            print('New best iteration : ', iteration+1, 'Error: ',total_error / dataloader.num_batches)
+                   smallest_err)
+            print('New best iteration : ', iteration+1, 'Error: ',NLL_mean)
             smallest_err_iter_num = iteration
-            smallest_err = total_error
+            smallest_err = NLL_mean
 
     dataloader.write_to_plot_file(iteration_result[smallest_err_iter_num], os.path.join(plot_directory, plot_test_file_directory)) 
 
@@ -358,7 +422,7 @@ def main():
     print("==================================================")
     print("==================================================")
     print('Best final iteration : ', smallest_err_iter_num+1)
-    print('ADE: ', smallest_err.item() / dataloader.num_batches)
+    print('ADE: ', iteration_total_error[smallest_err_iter_num].item())
     print('FDE: ', iteration_final_error[smallest_err_iter_num].item())
     print('MHD: ', iteration_MHD_error[smallest_err_iter_num].item())
     print('Speed error: ',iteration_speed_error[smallest_err_iter_num].item()**0.5)
@@ -366,7 +430,24 @@ def main():
     print('Collision percentage: ', round(iteration_collision_percent[smallest_err_iter_num], 4) * 100)
     print('Collision percentage (ped-ped): ', round(iteration_collision_percent_pedped[smallest_err_iter_num], 4) * 100)
     print('Collision percentage (ped-veh): ', round(iteration_collision_percent_pedveh[smallest_err_iter_num], 4) * 100)
+
+    best_iter_NLL_list = iteration_NLL_list[smallest_err_iter_num]
+    # calculate the mean and std for this list 
+    NLL_mean, NLL_std = calculate_mean_and_std(best_iter_NLL_list)
+    print('NLL: ', NLL_mean, 'with std of ', NLL_std)
+    print('ESV_sigma1: ', iteration_ESV_sigma1[smallest_err_iter_num])
+    print('ESV_sigma2: ', iteration_ESV_sigma2[smallest_err_iter_num])
+    print('ESV_sigma3: ', iteration_ESV_sigma3[smallest_err_iter_num])
+
     
+    # plt.subplot(2,1,1)
+    # plt.plot(range(start_iteration,sample_args.iteration), iteration_total_error, 'b', linewidth=2.0, label="ADE")
+    # plt.ylabel("ADE")
+    # plt.subplot(2,1,2)
+    # plt.plot(range(start_iteration,sample_args.iteration), iteration_final_error, 'k', linewidth=2.0, label="FDE")
+    # plt.xlabel('epoch number of the stored trained model')
+    # plt.ylabel("FDE")
+    # plt.savefig("Store_Results/plot/test/test_error.png")
 
 
 def sample(x_seq, Pedlist, args, net, true_x_seq, true_Pedlist, saved_args, dataloader, look_up, num_pedlist, is_gru,
@@ -454,8 +535,8 @@ def sample(x_seq, Pedlist, args, net, true_x_seq, true_Pedlist, saved_args, data
             ret_x_seq[tstep + 1, :, 0] = next_x
             ret_x_seq[tstep + 1, :, 1] = next_y
 
-            # One could also assign the mean to the next state instead of sampling from the distrbution. 
-            # for that one should comment the above three lines and uncomment the following lines 
+            # # One could also assign the mean to the next state instead of sampling from the distrbution. 
+            # # for that one should comment the above three lines and uncomment the following lines 
             # next_x_mean = mux
             # next_y_mean = muy
             # ret_x_seq[tstep + 1, :, 0] = next_x_mean
@@ -597,6 +678,24 @@ def sample(x_seq, Pedlist, args, net, true_x_seq, true_Pedlist, saved_args, data
 
 
         return ret_x_seq, dist_param_seq
+    
+
+def calculate_mean_and_std(data):
+    """
+    Calculate the mean and standard deviation of a list of numbers.
+
+    Parameters:
+    - data: List of numbers
+
+    Returns:
+    - mean: Mean of the data
+    - std_dev: Standard deviation of the data
+    """
+
+    data = np.asarray(data)
+    mean = np.mean(data)
+    std_dev = np.std(data)
+    return mean, std_dev
 
 
 

@@ -7,6 +7,7 @@ from model_VanillaLSTM import VLSTMModel
 from torch.autograd import Variable
 import math
 import itertools
+from scipy.stats import chi2
 
 
 # one time set dictionary for a exist key
@@ -60,7 +61,7 @@ def getCoef(outputs):
     corr = torch.tanh(corr)
     return mux, muy, sx, sy, corr
 
-def Gaussian2DLikelihood(outputs, targets, nodesPresent, look_up):
+def Gaussian2DLikelihood(outputs, targets, nodesPresent, look_up, test=False):
     '''
     params:
     outputs : predicted locations
@@ -93,6 +94,7 @@ def Gaussian2DLikelihood(outputs, targets, nodesPresent, look_up):
     epsilon = 1e-20
 
     result = -torch.log(torch.clamp(result, min=epsilon))
+    results = []
 
     loss = 0
     counter = 0
@@ -106,6 +108,13 @@ def Gaussian2DLikelihood(outputs, targets, nodesPresent, look_up):
             nodeID = look_up[nodeID]
             loss = loss + result[framenum, nodeID]
             counter = counter + 1
+
+            if test:
+                # also store the individual NLL (results)
+                results.append(result[framenum, nodeID].item())
+    
+    if test:
+        return results, loss/counter
 
     if counter != 0:
         return loss / counter
@@ -517,6 +526,100 @@ def get_velocity_errors(ret_nodes, nodes, assumedNodesPresent, ObsNodesPresent, 
 
     return torch.mean(error_speed), sum(error_heading)/len(error_heading)
 
+def get_mean_NLL(dist_param, orig_x, PedsList, PedsList_obs, using_cuda, lookup):
+    '''
+    The output is a list of individual NLL for the exsting peds at each timestep.
+    being stored to later calculate the mean and std of the whole trajeoctries in the test set
+    '''
+
+    # exclud those peds from the PedList that we did not have any observation data from them
+    for f in range(len(PedsList)):
+        PedsList[f] = [i for i in PedsList[f] if i in PedsList_obs]
+    
+    NLL_list, NLL_loss = Gaussian2DLikelihood(dist_param, orig_x, PedsList, lookup, test=True) # the output being a list of NLL
+    return NLL_list, NLL_loss.item()
+
+
+
+def within_sigma_levels(point, mean, covariance):
+
+    '''
+    Checking if a given point (GT here) falls into
+    i sigma level of the predicted distribution given its mean and covaraince
+    where i is 1, 2, and 3
+    The output is a boolean vector of size 3 
+    '''
+
+    # Calculate the Mahalanobis distance
+    # delta = point - mean
+    # inv_covariance = torch.inverse(covariance)
+    # mahalanobis_distance = torch.sqrt(torch.matmul(torch.matmul(delta, inv_covariance), delta))
+
+    _mahalanobis_distance = mahalanobis_distance(point, mean, covariance).item()
+
+    # Determine the critical values for 1-sigma, 2-sigma, and 3-sigma levels
+    dim = len(mean)
+    critical_value_1sigma = np.sqrt(chi2.ppf(0.68, dim))
+    critical_value_2sigma = np.sqrt(chi2.ppf(0.95, dim))
+    critical_value_3sigma = np.sqrt(chi2.ppf(0.997, dim))
+
+    # chi2_distribution =  torch.distributions.Chi2(df=dim)
+    # critical_value_1sigma = torch.sqrt(chi2_distribution.icdf(torch.tensor(0.68)))
+    # critical_value_2sigma = torch.sqrt(chi2_distribution.icdf(torch.tensor(0.95)))
+    # critical_value_3sigma = torch.sqrt(chi2_distribution.icdf(torch.tensor(0.997)))
+
+    # Check if the Mahalanobis distance is within the sigma levels
+    within_1sigma = int(_mahalanobis_distance <= critical_value_1sigma)
+    within_2sigma = int(_mahalanobis_distance <= critical_value_2sigma)
+    within_3sigma = int(_mahalanobis_distance <= critical_value_3sigma)
+
+    return within_1sigma, within_2sigma, within_3sigma
+
+
+
+def Delta_Empirical_Sigma_Value(dist_param, orig_x, PedsList, PedsList_obs, using_cuda, lookup):
+    '''
+    The difference in the fraction of GT positions that fall within the
+    i-sigma level set of the predicted distribution and the fraction from
+    an ideal Gaussian
+    '''
+
+    cov_matrix = cov_mat_generation(dist_param)
+    # exclud those peds from the PedList that we did not have any observation data from them
+    for f in range(len(PedsList)):
+        PedsList[f] = [i for i in PedsList[f] if i in PedsList_obs]
+
+    counter = 0
+    is_in_1_sigma = 0
+    is_in_2_sigma = 0
+    is_in_3_sigma = 0
+    
+    for f in range(len(PedsList)):
+        for ped in PedsList[f]:
+            counter += 1 
+            ped_indx = lookup[ped]
+            is_in_1_sigma += within_sigma_levels(orig_x[f,ped_indx,:],
+                                                dist_param[f, ped_indx, 0:2], cov_matrix[f,ped_indx])[0]
+            is_in_2_sigma += within_sigma_levels(orig_x[f,ped_indx,:],
+                                                dist_param[f, ped_indx, 0:2], cov_matrix[f,ped_indx])[1]
+            is_in_3_sigma += within_sigma_levels(orig_x[f,ped_indx,:], 
+                                                dist_param[f, ped_indx, 0:2], cov_matrix[f,ped_indx])[2]
+            
+    # leave the calculation of the fraction to when we have the predictions for all the data in test set
+    # and just report the difference and the counter here
+    return is_in_1_sigma, is_in_2_sigma, is_in_3_sigma, counter
+
+    # fraction_1sigma = is_in_1_sigma/counter
+    # fraction_2sigma = is_in_2_sigma/counter
+    # fraction_3sigma = is_in_3_sigma/counter
+
+    # diff_1sigma = fraction_1sigma - 0.68
+    # diff_2sigma = fraction_2sigma - 0.95
+    # diff_3sigma = fraction_3sigma - 0.997
+
+    # return diff_1sigma, diff_2sigma, diff_3sigma
+
+
 
 def available_frame_extraction(agent_indx, pedlist_seq, lookup_seq):
     
@@ -548,5 +651,133 @@ def reverse_dict(lookup):
     
     return reversedDict
 
+def cov_mat_generation(dist_param):
+        
+    '''
+    Generating the covanriance matrix from the distribution parameters
+    dist_param: numpy array of shape: (pred_seq_len, num_peds, 5)
+    bi-varainat gaussian distribution parameters in the third dimesnion are ordered as follows:
+    [mu_x, mu_y, sigma_x, sigma_y, rho]
+    Output: numpy array of shape: (pred_seq_len, num_peds, 2, 2)
+    '''
+    
+    mu_x = dist_param[:, :, 0]
+    mu_y = dist_param[:, :, 1]
+    sigma_x = dist_param[:, :, 2]
+    sigma_y = dist_param[:, :, 3]
+    rho = dist_param[:, :, 4]
+
+    # compute the element of the covariance matrix
+    sigma_x2 = sigma_x ** 2
+    sigma_y2 = sigma_y ** 2
+    sigma_xy = sigma_x * sigma_y
+    rho_sigma_xy = rho * sigma_xy
+
+    # create the convanriance matrix tensor
+    cov_mat = torch.stack([
+        torch.stack([sigma_x2, rho_sigma_xy], dim=-1),
+        torch.stack([rho_sigma_xy, sigma_y2], dim=-1)
+        ], dim=-2)
+
+    for t in range(cov_mat.shape[0]):
+        for ped in range(cov_mat.shape[1]):
+            test_cov = torch.tensor([[sigma_x2[t, ped], rho_sigma_xy[t, ped]], [rho_sigma_xy[t, ped], sigma_y2[t, ped]]])
+    
+    # I guess there is no need for worrying about the non-existing peds of the corrent steps in the output
+    # as the distribution parameters for those peds are all zeros and the cov_mat will be all zeros as well
+    # each row is the cov_mat of the prediction we have for that specifc time step
+    
+    return cov_mat
 
 
+def mahalanobis_distance(GT, mean, covariance):
+    '''
+    Calculate the Mahalanobis distance
+    params:
+    GT: ground truth locations of shape (num_frames, num_pedestrian, 2)
+    mean: mean of the predicted locations of shape (num_frames, num_pedestrian, 2)
+    covariance: covariance matrix of the predicted locations of shape (num_frames, num_pedestrian, 2, 2)
+    output: mahalanobis distance of shape (num_frames, num_pedestrian)
+    '''
+    delta =  mean - GT
+    
+    # Reshape the difference tensor to (num_frames, num_pedestrian, 2, 1)
+    delta = delta.unsqueeze(-1)
+
+    # Calculate the inverse of the covariance matrix
+    covariance_inverse = torch.inverse(covariance)
+
+    # Compute the Mahalanobis distance
+    mahalanobis_dist = torch.matmul(covariance_inverse, delta)
+    mahalanobis_dist = torch.matmul(delta.transpose(-1, -2), mahalanobis_dist).squeeze(-1) # transpose should be between -2,-3
+    mahalanobis_dist = torch.sqrt(mahalanobis_dist).squeeze(-1)
+
+
+    return mahalanobis_dist
+
+# def probability_within_confidence_interval(mahalanobis_dist, dof=2):
+#     # Calculate the probability using the chi-squared CDF
+#     probability = chi2.cdf(mahalanobis_dist, df=dof)
+
+#     return probability
+
+def uncertainty_aware_loss(outputs, targets, mask, use_cuda):
+
+    '''
+    params:
+    outputs : bi-variant Gaussian distribution paramters of the predicted locations
+    targets : true locations
+    nodesPresent : True nodes present in each frame in the sequence
+    look_up : lookup table for determining which ped is in which array index
+
+    '''
+    seq_length = outputs.size()[0]
+    num_peds = outputs.size()[1]
+
+    degrees_of_freedom = torch.tensor(2, dtype=torch.int32) # for 2D bi-variant Gaussian distribution
+
+    cov_matrix = cov_mat_generation(outputs)
+    predicted_covs = torch.tile(torch.tensor([[0.01, 0.0], [0.0, 0.01]]), (seq_length, num_peds, 1, 1))
+    if use_cuda:
+        predicted_covs = predicted_covs.cuda()
+        degrees_of_freedom = degrees_of_freedom.to('cuda')
+
+    for ped_indx in range(num_peds):    
+        # find the frames that this ped is present using nodesPresent
+        present_frames = torch.nonzero(mask[:, ped_indx]).squeeze(1)
+        predicted_covs[present_frames, ped_indx, :] = cov_matrix[present_frames, ped_indx,:] # for those peds that have no data, this keeps the default value of 0.01 !!!!!
+
+    mahalanobis_dist = mahalanobis_distance(targets, outputs[:,:,:2], predicted_covs) # this should be tensor of same size as mask
+
+    
+    # Calculate the probability density function (PDF) for the given Mahalanobis distance (a chi2-squared distribution)
+    # we want to minimize the mahalanobis distance, so we want to maximize the pdf_value
+    # Create a Chi2 distribution with the specified degrees of freedom
+    chi2_distribution = torch.distributions.Chi2(degrees_of_freedom)
+    # Calculate the PDF for each element of the tensor
+    pdf_values = chi2_distribution.log_prob(mahalanobis_dist).exp()
+    
+    # Numerical stability
+    epsilon = 1e-20
+    result = -torch.log(torch.clamp(pdf_values, min=epsilon))
+
+
+    result = result * mask # this will make those elements that do not existm don't count (those peds that have no data)
+    # sum all the numbers in the tensor
+    loss = torch.sum(result)
+    # the overall distances for all the peds in the sequence
+    counter = torch.sum(mask)
+    if counter != 0:
+        return loss / counter
+    else:
+        return loss # if loss is a valid number! otherwise we have to return 0
+    
+
+
+def combination_loss(outputs, targets, nodesPresent, look_up, mask, use_cuda ):
+
+    NLL_loss = Gaussian2DLikelihood(outputs, targets, nodesPresent, look_up)
+    uncertainty_loss = uncertainty_aware_loss(outputs, targets, mask, use_cuda)
+    loss = NLL_loss + uncertainty_loss
+
+    return loss, NLL_loss, uncertainty_loss

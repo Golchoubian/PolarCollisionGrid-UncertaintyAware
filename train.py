@@ -27,7 +27,7 @@ def main():
     parser.add_argument('--rnn_size', type=int, default=128,
                         help='size of RNN hidden state')
     # Size of each batch parameter
-    parser.add_argument('--batch_size', type=int, default=10,
+    parser.add_argument('--batch_size', type=int, default=100, # 
                         help='minibatch size')
     # Length of sequence to be considered
     parser.add_argument('--seq_length', type=int, default=12, # 12 for HBS (obs: 6, pred: 6)
@@ -98,7 +98,7 @@ def main():
     parser.add_argument('--freq_optimizer', type=int, default=8,
                         help='Frequency number(epoch) of learning decay for optimizer')
     # store grids in epoch 0 and use further.2 times faster -> Intensive memory use around 12 GB
-    parser.add_argument('--store_grid', action="store_true", default=True, 
+    parser.add_argument('--store_grid', action="store_true", default=True, # !!!!!!!!!!!!!!!!!!!!!!!!! 
                         help='Whether store grids and use further epoch')
 
     # Size of neighborhood for vehilces in pedestrians grid 
@@ -241,9 +241,9 @@ def train(args):
                 x_seq_veh , numVehsList_seq, VehsList_seq = x_veh[sequence], numVehsList[sequence], VehsList[sequence]
 
                 #dense vector creation
-                x_seq, lookup_seq = dataloader.convert_proper_array(x_seq, numPedsList_seq, PedsList_seq) 
+                x_seq, lookup_seq, mask = dataloader.convert_proper_array(x_seq, numPedsList_seq, PedsList_seq) 
                 # order of featurs in x_seq: x, y, vx, vy, timestamp, ax, ay 
-                x_seq_veh, lookup_seq_veh = dataloader.convert_proper_array(x_seq_veh, numVehsList_seq, VehsList_seq, veh_flag=True)
+                x_seq_veh, lookup_seq_veh, mask_veh = dataloader.convert_proper_array(x_seq_veh, numVehsList_seq, VehsList_seq, veh_flag=True)
               
                 x_seq_orig = x_seq.clone()
                 x_seq_veh_orig = x_seq_veh.clone()
@@ -277,6 +277,7 @@ def train(args):
                 if args.use_cuda:                    
                     x_seq = x_seq.cuda()
                     x_seq_veh = x_seq_veh.cuda()
+                    mask = mask.cuda()
 
                 y_seq = x_seq[1:,:,:2]
                 x_seq = x_seq[:-1,:,:]
@@ -324,7 +325,13 @@ def train(args):
                     raise ValueError("Method is not defined")
               
                 # Compute loss
-                loss = Gaussian2DLikelihood(outputs, y_seq, PedsList_seq[1:], lookup_seq)
+                # loss = Gaussian2DLikelihood(outputs, y_seq, PedsList_seq[1:], lookup_seq)
+                # loss = uncertainty_aware_loss(outputs, y_seq, mask[1:], args.use_cuda)
+                loss, NLL_loss, uncertainty_loss = combination_loss(outputs, y_seq,  PedsList_seq[1:], lookup_seq, mask[1:], args.use_cuda)
+                # print('<<<<<<<<<<<<<>>>>>>>>>>>>>')
+                # print('loss: {}'.format(loss))
+                # print("NLL_loss: {}".format(NLL_loss))
+                # print("uncertainty_loss: {}".format(uncertainty_loss))
                 loss = loss / dataloader.batch_size
                 loss_batch += loss.item()
 

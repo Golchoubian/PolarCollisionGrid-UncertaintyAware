@@ -649,17 +649,19 @@ class DataLoader():
         lookup_table = dict(zip(unique_ids, range(0, len(unique_ids))))
 
         seq_data = np.zeros(shape=(self.seq_length, len(lookup_table), self.num_features)) 
-
+        availability_mask = np.zeros(shape=(self.seq_length, len(lookup_table)),dtype=np.int8)
 
         # create new structure of array
         for ind, frame in enumerate(x_seq):
             if num_pedlist[ind] != 0:
                 corr_index = [lookup_table[x] for x in frame[:, 0]]
+                availability_mask[ind, corr_index] = 1
                 seq_data[ind, corr_index,:] = frame[:,1:] # adding vx and vy, timestep, ax and ay
 
         return_arr = Variable(torch.from_numpy(np.array(seq_data)).float())
+        return_mask = Variable(torch.from_numpy(np.array(availability_mask)))
 
-        return return_arr, lookup_table
+        return return_arr, lookup_table, return_mask
 
 
     def get_len_of_dataset(self):
@@ -728,9 +730,9 @@ class DataLoader():
             x_seq_veh , numVehsList_seq, VehsList_seq = self.sequence_x_veh[seq], self.sequence_numVehsList[seq], self.sequence_VehsList[seq]
 
             #dense vector creation
-            x_seq, lookup_seq = self.convert_proper_array(x_seq, numPedsList_seq, PedsList_seq) 
+            x_seq, lookup_seq, _ = self.convert_proper_array(x_seq, numPedsList_seq, PedsList_seq) 
             # order of featurs in x_seq: x, y, vx, vy, timestamp, ax, ay 
-            x_seq_veh, lookup_seq_veh = self.convert_proper_array(x_seq_veh, numVehsList_seq, VehsList_seq, veh_flag=True)
+            x_seq_veh, lookup_seq_veh, _ = self.convert_proper_array(x_seq_veh, numVehsList_seq, VehsList_seq, veh_flag=True)
 
             if args.method == 1: # Social LSTM
                 grid_seq = getSequenceGridMask(x_seq, PedsList_seq, args.neighborhood_size, args.grid_size, False, lookup_seq) 
