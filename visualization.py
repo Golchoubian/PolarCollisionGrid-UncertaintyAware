@@ -84,6 +84,8 @@ def plot_trajecotries(true_trajectories,pred_trajectories,pred_trajectories_Soci
             plot_bivariate_gaussian3(mean, cov, ax, 1)
         ax.plot(pred_trajectories[pred_frame_nums,agent_index,0], pred_trajectories[pred_frame_nums,agent_index,1],
                   c='b', ls="-", linewidth=1.0)
+        # ax.plot(dist_param_seq[pred_frame_nums,agent_index,0], dist_param_seq[pred_frame_nums,agent_index,1],
+        #           c='b', ls="-", linewidth=1.0)
         
 
         # # prediction of SocialLSTM

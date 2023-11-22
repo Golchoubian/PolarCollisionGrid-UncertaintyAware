@@ -41,11 +41,11 @@ def main():
 
     # Model to be loaded (saved model (the epoch #) during training
     # with the best performace according to previous invesigation on valiquation set)
-    parser.add_argument('--epoch', type=int, default= 196, # 181, 3, 196
+    parser.add_argument('--epoch', type=int, default= 115, # 115, # 181, 3, 196
                             help='Epoch of model to be loaded')
     
     # The number of samples to be generated for each test data, when reporting its performance
-    parser.add_argument('--sample_size', type=int, default=20,
+    parser.add_argument('--sample_size', type=int, default=1,
                             help='The number of sample trajectory that will be generated')
         
 
@@ -104,7 +104,7 @@ def main():
     # This iteration is for testing the results for different stages of the trained model
     # (the stored paramters of the model at different iterations)
     start_iteration = 0
-    for iteration in [0]: # range(start_iteration, sample_args.iteration): 
+    for iteration in range(start_iteration, sample_args.iteration): 
         # Initialize net
         net = get_model(sample_args.method, saved_args, True)
 
@@ -112,8 +112,8 @@ def main():
             net = net.cuda()  
 
         # Get the checkpoint path for loading the trained model
-        # checkpoint_path = os.path.join(save_directory, save_tar_name+str(iteration)+'.tar')
-        checkpoint_path = os.path.join(save_directory, save_tar_name+str(sample_args.epoch)+'.tar')
+        checkpoint_path = os.path.join(save_directory, save_tar_name+str(iteration)+'.tar')
+        # checkpoint_path = os.path.join(save_directory, save_tar_name+str(sample_args.epoch)+'.tar')
         if os.path.isfile(checkpoint_path):
             print('Loading checkpoint')
             checkpoint = torch.load(checkpoint_path)
@@ -440,14 +440,14 @@ def main():
     print('ESV_sigma3: ', iteration_ESV_sigma3[smallest_err_iter_num])
 
     
-    # plt.subplot(2,1,1)
-    # plt.plot(range(start_iteration,sample_args.iteration), iteration_total_error, 'b', linewidth=2.0, label="ADE")
-    # plt.ylabel("ADE")
-    # plt.subplot(2,1,2)
-    # plt.plot(range(start_iteration,sample_args.iteration), iteration_final_error, 'k', linewidth=2.0, label="FDE")
-    # plt.xlabel('epoch number of the stored trained model')
-    # plt.ylabel("FDE")
-    # plt.savefig("Store_Results/plot/test/test_error.png")
+    plt.subplot(2,1,1)
+    plt.plot(range(start_iteration,sample_args.iteration), iteration_total_error, 'b', linewidth=2.0, label="ADE")
+    plt.ylabel("ADE")
+    plt.subplot(2,1,2)
+    plt.plot(range(start_iteration,sample_args.iteration), iteration_final_error, 'k', linewidth=2.0, label="FDE")
+    plt.xlabel('epoch number of the stored trained model')
+    plt.ylabel("FDE")
+    plt.savefig("Store_Results/plot/test/test_error.png")
 
 
 def sample(x_seq, Pedlist, args, net, true_x_seq, true_Pedlist, saved_args, dataloader, look_up, num_pedlist, is_gru,
@@ -529,18 +529,18 @@ def sample(x_seq, Pedlist, args, net, true_x_seq, true_Pedlist, saved_args, data
             # Storing the paramteres of the distriution for plotting
             dist_param_seq[tstep + 1, :, :] = out_obs.clone()
 
-            # Sample from the bivariate Gaussian
-            next_x, next_y = sample_gaussian_2d(mux.data, muy.data, sx.data, sy.data, corr.data, true_Pedlist[tstep], look_up)
+            # # Sample from the bivariate Gaussian
+            # next_x, next_y = sample_gaussian_2d(mux.data, muy.data, sx.data, sy.data, corr.data, true_Pedlist[tstep], look_up)
 
-            ret_x_seq[tstep + 1, :, 0] = next_x
-            ret_x_seq[tstep + 1, :, 1] = next_y
+            # ret_x_seq[tstep + 1, :, 0] = next_x
+            # ret_x_seq[tstep + 1, :, 1] = next_y
 
-            # # One could also assign the mean to the next state instead of sampling from the distrbution. 
-            # # for that one should comment the above three lines and uncomment the following lines 
-            # next_x_mean = mux
-            # next_y_mean = muy
-            # ret_x_seq[tstep + 1, :, 0] = next_x_mean
-            # ret_x_seq[tstep + 1, :, 1] = next_y_mean
+            # One could also assign the mean to the next state instead of sampling from the distrbution. 
+            # for that one should comment the above three lines and uncomment the following lines 
+            next_x_mean = mux
+            next_y_mean = muy
+            ret_x_seq[tstep + 1, :, 0] = next_x_mean
+            ret_x_seq[tstep + 1, :, 1] = next_y_mean
 
     
         # Last seen grid
@@ -587,20 +587,20 @@ def sample(x_seq, Pedlist, args, net, true_x_seq, true_Pedlist, saved_args, data
             # Storing the paramteres of the distriution
             dist_param_seq[tstep + 1, :, :] = torch.stack((mux, muy, sx, sy, corr),2) 
 
-            # Sample from the bivariate Gaussian
-            next_x, next_y = sample_gaussian_2d(mux.data, muy.data, sx.data, sy.data, corr.data, true_Pedlist[tstep], look_up)
+            # # Sample from the bivariate Gaussian
+            # next_x, next_y = sample_gaussian_2d(mux.data, muy.data, sx.data, sy.data, corr.data, true_Pedlist[tstep], look_up)
 
-            # Store the predicted position
-            ret_x_seq[tstep + 1, :, 0] = next_x
-            ret_x_seq[tstep + 1, :, 1] = next_y
+            # # Store the predicted position
+            # ret_x_seq[tstep + 1, :, 0] = next_x
+            # ret_x_seq[tstep + 1, :, 1] = next_y
 
             # One could also assign the mean to the next state instead of sampling from the distrbution. 
             # for that one should comment the above three lines and uncomment the following lines 
 
-            # next_x_mean = mux
-            # next_y_mean = muy
-            # ret_x_seq[tstep + 1, :, 0] = next_x_mean
-            # ret_x_seq[tstep + 1, :, 1] = next_y_mean
+            next_x_mean = mux
+            next_y_mean = muy
+            ret_x_seq[tstep + 1, :, 0] = next_x_mean
+            ret_x_seq[tstep + 1, :, 1] = next_y_mean
 
 
             # Preparing a ret_x_seq that is covnerted back to the original frame by adding the first position.

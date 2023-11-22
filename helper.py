@@ -8,6 +8,7 @@ from torch.autograd import Variable
 import math
 import itertools
 from scipy.stats import chi2
+from matplotlib import pyplot as plt
 
 
 # one time set dictionary for a exist key
@@ -721,6 +722,35 @@ def mahalanobis_distance(GT, mean, covariance):
 
 #     return probability
 
+
+def bhattacharyya_distance(mu1, cov1, mu2, cov2):
+    """
+    Calculate the Bhattacharyya distance between two bivariate Gaussian distributions.
+
+    Parameters:
+    - mu1: Mean of the first distribution (Tensor of shape (seq_lenght, num_peds, 2)).
+    - cov1: Covariance matrix of the first distribution (Tensor of (seq_lenght, num_peds, 2, 2)).
+    - mu2: Mean of the second distribution (Tensor of shape (seq_lenght, num_peds, 2)).
+    - cov2: Covariance matrix of the second distribution (Tensor of (seq_lenght, num_peds, 2, 2)).
+
+    Returns:
+    - Bhattacharyya distance: A tensor of shape [seq_length, num_peds]
+    """
+
+    # Calculate Bhattacharyya coefficient
+    cov_avg = 0.5 * (cov1 + cov2)
+    diff = mu2 - mu1
+
+    diff = diff.unsqueeze(-1)
+
+    mahalanobis_sq = torch.matmul(diff.transpose(-1,-2), torch.matmul(torch.inverse(cov_avg), diff)).squeeze(-1).squeeze(-1)  
+    bhattacharyya_coeff = 0.125 * mahalanobis_sq + 0.5 * torch.logdet(cov_avg) - 0.25 * (torch.logdet(cov1) + torch.logdet(cov2))
+
+    # Calculate Bhattacharyya distance
+    bhatt_distance = bhattacharyya_coeff # -torch.log(torch.exp(-bhattacharyya_coeff))
+
+    return bhatt_distance
+
 def uncertainty_aware_loss(outputs, targets, mask, use_cuda):
 
     '''
@@ -773,6 +803,42 @@ def uncertainty_aware_loss(outputs, targets, mask, use_cuda):
         return loss # if loss is a valid number! otherwise we have to return 0
     
 
+def uncertainty_aware_loss_Dist2Dist(outputs, targets_mean, targets_cov, mask, use_cuda):
+
+    '''
+    Calculating the mahalanobis distance between the ground truth distribution and the predicted distribution
+    params:
+    outputs : bi-variant Gaussian distribution paramters of the predicted locations
+    targets : true locations (mean and distribution)
+    nodesPresent : True nodes present in each frame in the sequence
+    look_up : lookup table for determining which ped is in which array index
+    '''
+    seq_length = outputs.size()[0]
+    num_peds = outputs.size()[1]
+
+    cov_matrix = cov_mat_generation(outputs)
+    predicted_covs = torch.tile(torch.tensor([[0.01, 0.0], [0.0, 0.01]]), (seq_length, num_peds, 1, 1))
+    if use_cuda:
+        predicted_covs = predicted_covs.cuda()
+
+    for ped_indx in range(num_peds):    
+        # find the frames that this ped is present using nodesPresent
+        present_frames = torch.nonzero(mask[:, ped_indx]).squeeze(1)
+        predicted_covs[present_frames, ped_indx, :] = cov_matrix[present_frames, ped_indx,:] # for those peds that have no data, this keeps the default value of 0.01 !!!!!
+
+    Bh_dist = bhattacharyya_distance(targets_mean, targets_cov, outputs[:,:,:2], predicted_covs) # this should be tensor of same size as mask
+
+    result = Bh_dist * mask # this will make those elements that do not exist, don't count (those peds that have no data)
+    # sum all the numbers in the tensor
+    loss = torch.sum(result)
+    # the overall distances for all the peds in the sequence
+    counter = torch.sum(mask)
+    if counter != 0:
+        return loss / counter
+    else:
+        return loss # if loss is a valid number! otherwise we have to return 0
+    
+
 
 def combination_loss(outputs, targets, nodesPresent, look_up, mask, use_cuda ):
 
@@ -781,3 +847,139 @@ def combination_loss(outputs, targets, nodesPresent, look_up, mask, use_cuda ):
     loss = NLL_loss + uncertainty_loss
 
     return loss, NLL_loss, uncertainty_loss
+
+
+def combination_loss_Dist2Dist(outputs, targets_mean, targets_cov, nodesPresent, look_up, mask, use_cuda):
+   
+    NLL_loss = Gaussian2DLikelihood(outputs, targets_mean, nodesPresent, look_up)
+    uncertainty_loss = uncertainty_aware_loss_Dist2Dist(outputs, targets_mean, targets_cov, mask, use_cuda)
+    loss = NLL_loss + uncertainty_loss # might need a weight for each loss in this case since they might not be in the same scale
+
+    return loss, NLL_loss, uncertainty_loss
+
+
+
+def KF_covariance_generator(x_seq, mask, dt, plot_bivariate_gaussian3, ax2=None):
+
+    '''
+    This function is used to generate a distribution around each
+    ground truth data using Kalman Filter.
+    It ouptus the filtered states and the covariance matrix of the distribution
+    Outputs:
+    filtered_states: tensor of shape (seq_length, num_peds, 2)
+    filtered_covariances: tensor of shape (seq_length, num_peds, 2, 2)
+    '''
+    # Note: !!!!!!!!! for now we are not using the mask data, considering that the data of all the peds are available in each frame !!!!!!!!!!!!!!!!!
+
+    # parameters to adjust later
+    process_noise_std = 0.5
+    measurement_noise_std = 0.7
+    
+    # this should be done before making the x_seq as position change
+    seq_length = x_seq.shape[0]
+    num_peds = x_seq.shape[1]
+
+    # Initial state and covariance for each ped
+    initial_state = x_seq[0,:,:4]
+    initial_covariance = torch.tile(torch.eye(4), (num_peds, 1, 1))
+
+    # Process and measurement noise covariance matrices
+    process_noise = torch.eye(4, dtype=torch.float32).view(1, 4, 4).repeat(num_peds, 1, 1) * process_noise_std**2
+    measurement_noise = torch.eye(2, dtype=torch.float32).view(1, 2, 2).repeat(num_peds, 1, 1) * measurement_noise_std**2
+
+    # State transition matrix and measurement matrix
+    F = torch.tensor([[1, 0, dt, 0], [0, 1, 0, dt], [0, 0, 1, 0], [0, 0, 0, 1]], dtype=torch.float32).view(1, 4, 4).repeat(num_peds, 1, 1)
+    H = torch.tensor([[1, 0, 0, 0], [0, 1, 0, 0]], dtype=torch.float32).view(1, 2, 4).repeat(num_peds, 1, 1)
+
+    measurements = x_seq[1:, :, :2] # only position data is used for measurement
+
+    # Run Kalman filter
+    filtered_states, filtered_covariances = kalman_filter(
+        initial_state, initial_covariance, measurements, measurement_noise, process_noise, F, H)
+    
+
+    # # ============== test the output by plotting ============
+    # for agent_index in range(x_seq.shape[1]):
+    #     for f in range(x_seq.shape[0]):
+    #         if mask[f,agent_index] != 0:
+    #             mean = filtered_states[f,agent_index,:2]
+    #             cov = filtered_covariances[f,agent_index,:2,:2]
+    #             plot_bivariate_gaussian3(mean, cov, ax2, 1)
+    #             ax2.plot(mean[0], mean[1], c='b', marker="s", markersize=1)
+    #             ax2.plot(x_seq[f,agent_index,0], x_seq[f,agent_index,1], c='r', marker="s", markersize=1)
+    #     if agent_index == 0:
+    #         ax2.plot(filtered_states[:,agent_index,0], filtered_states[:,agent_index,1], c='b', ls="-", linewidth=1.0, label="filtered")
+    #         ax2.plot(x_seq[:,agent_index,0], x_seq[:,agent_index,1], c='r', ls="-", linewidth=1.0, label="ground truth / measurement")
+    #         ax2.legend()
+    #     else: 
+    #         ax2.plot(filtered_states[:,agent_index,0], filtered_states[:,agent_index,1], c='b', ls="-", linewidth=1.0)
+    #         ax2.plot(x_seq[:,agent_index,0], x_seq[:,agent_index,1], c='r', ls="-", linewidth=1.0)
+
+    # plt.show()
+    # plt.pause(5)
+    # plt.cla()
+    # # =====================================================
+    
+    return filtered_states[:,:,:2], filtered_covariances[:,:,:2,:2] # only passing the position covariance matrix
+
+
+
+
+def kalman_filter(x, P, measurements, R, Q, F, H): 
+    # !!! Remember to do it only for those exisitng. You might be able to take care of this in the KF_covariance_generator function !!
+    """
+    Kalman Filter implementation
+
+    Parameters:
+    - x: Initial state estimate
+    - P: Initial state covariance matrix
+    - measurements: List of measurements over time !!!! this is a torch tensor not a list !!!!!!!!!!!!!!!
+    - R: Measurement noise covariance matrix
+    - Q: Process noise covariance matrix
+    - F: State transition matrix
+    - H: Measurement matrix
+
+    Returns:
+    - filtered_states: tensor of filtered state estimates of dimension (seq_len, num_peds, 4)
+    - filtered_covariances: tensor of filtered state covariances of dieemnsion (seq_len, num_peds, 4, 4)
+    """
+    x = x.unsqueeze(2) 
+    filtered_states = [x]
+    filtered_covariances = [P]
+ 
+
+    for z in measurements: # this is going step by step over the sequence length
+
+        z = z.unsqueeze(2)
+
+        # Prediction Step
+        x = F @ x
+        P = F @ P @ F.transpose(-1, -2) + Q
+
+        # Update Step
+        innovation = z - H @ x
+        S = H @ P @ H.transpose(-1, -2) + R
+        K = P @ H.transpose(-1, -2) @ torch.inverse(S)
+
+
+        x = x + K @ innovation
+        P = (torch.eye(x.shape[1]).unsqueeze(0).repeat(x.shape[0],1,1)- K @ H) @ P 
+
+        # for i in range(S.shape[0]):
+        #     print('=================')
+        #     print('P:', P[i,:,:])
+        # print('_______________________')
+
+        # print('P:', P[-1,:,:2]) # the covariance matrix of all pedestrians are the same in each time step !! The uncertainty also reduces over time !!
+
+        filtered_states.append(x)
+        filtered_covariances.append(P)
+
+    # print('=================')
+
+    # covnert the list of tensors to a single tensor of size (seq_len, num_peds, 2,2) for the convariance
+    filtered_covariances = torch.stack(filtered_covariances, dim=0)
+    # also convert the list of tesors for the filtered state to a single tensor of size (seq_len, num_peds, 4)
+    filtered_states = torch.stack(filtered_states, dim=0)
+
+    return filtered_states, filtered_covariances

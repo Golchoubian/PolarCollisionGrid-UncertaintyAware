@@ -8,7 +8,8 @@ import time
 import argparse
 import os
 import pickle
-from visualization import Loss_Plot 
+from visualization import Loss_Plot, plot_bivariate_gaussian3
+from matplotlib import pyplot as plt
 
 '''
 ## Acknowledgements
@@ -27,7 +28,7 @@ def main():
     parser.add_argument('--rnn_size', type=int, default=128,
                         help='size of RNN hidden state')
     # Size of each batch parameter
-    parser.add_argument('--batch_size', type=int, default=100, # 
+    parser.add_argument('--batch_size', type=int, default=10, # 
                         help='minibatch size')
     # Length of sequence to be considered
     parser.add_argument('--seq_length', type=int, default=12, # 12 for HBS (obs: 6, pred: 6)
@@ -201,6 +202,9 @@ def train(args):
     loss_epoch_list = []
     err_epoch_list = []
 
+    fig2, ax2 = plt.subplots()
+    plt.ion()
+
     # Training
     for epoch in range(args.num_epochs):
         
@@ -248,6 +252,9 @@ def train(args):
                 x_seq_orig = x_seq.clone()
                 x_seq_veh_orig = x_seq_veh.clone()
 
+                # create thec covaraince matrix using kalman filter and add it to x_seq
+                GT_filtered_state, GT_covariance = KF_covariance_generator(x_seq, mask, dataloader.timestamp, plot_bivariate_gaussian3, ax2) # the last two arguments are for testing the KF with ploting the bivariate gaussian
+
                 if args.store_grid:
                    grid_seq =  grids_batch[sequence]
                    grid_seq_veh_in_ped = grids_veh_batch[sequence]
@@ -274,11 +281,18 @@ def train(args):
                 x_seq, first_values_dict = position_change_seq(x_seq, PedsList_seq, lookup_seq)
                 x_seq_veh, first_values_dict_veh = position_change_seq(x_seq_veh, VehsList_seq, lookup_seq_veh)
 
+                GT_filt_pos, _ = position_change_seq(GT_filtered_state, PedsList_seq, lookup_seq)
+
                 if args.use_cuda:                    
                     x_seq = x_seq.cuda()
                     x_seq_veh = x_seq_veh.cuda()
                     mask = mask.cuda()
+                    GT_filt_pos = GT_filt_pos.cuda()
+                    GT_covariance = GT_covariance.cuda()
 
+                y_dist_mean = GT_filt_pos[1:,:,:2]
+                y_dis_cov = GT_covariance[1:,:,:2,:2]
+                
                 y_seq = x_seq[1:,:,:2]
                 x_seq = x_seq[:-1,:,:]
                 numPedsList_seq = numPedsList_seq[:-1]
@@ -327,7 +341,8 @@ def train(args):
                 # Compute loss
                 # loss = Gaussian2DLikelihood(outputs, y_seq, PedsList_seq[1:], lookup_seq)
                 # loss = uncertainty_aware_loss(outputs, y_seq, mask[1:], args.use_cuda)
-                loss, NLL_loss, uncertainty_loss = combination_loss(outputs, y_seq,  PedsList_seq[1:], lookup_seq, mask[1:], args.use_cuda)
+                # loss, NLL_loss, uncertainty_loss = combination_loss(outputs, y_seq,  PedsList_seq[1:], lookup_seq, mask[1:], args.use_cuda)
+                loss, NLL_loss, uncertainty_loss = combination_loss_Dist2Dist(outputs, y_seq, y_dis_cov, PedsList_seq[1:], lookup_seq, mask[1:], args.use_cuda)
                 # print('<<<<<<<<<<<<<>>>>>>>>>>>>>')
                 # print('loss: {}'.format(loss))
                 # print("NLL_loss: {}".format(NLL_loss))
