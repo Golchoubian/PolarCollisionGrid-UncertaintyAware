@@ -222,7 +222,8 @@ def plot_bivariate_gaussian3(mean, cov, ax, max_nstd=3):
     return ellip
 
 
-def Loss_Plot(train_batch_num, error_batch, loss_batch, file_name, x_axis_label):
+def Loss_Plot(train_batch_num, error_batch, loss_batch, file_name, x_axis_label,
+              NLL_loss_batch=None, uncertainty_loss_batch=None):
 
     
     plt.subplot(2,1,1)
@@ -231,6 +232,10 @@ def Loss_Plot(train_batch_num, error_batch, loss_batch, file_name, x_axis_label)
 
     plt.subplot(2,1,2)
     plt.plot(train_batch_num, loss_batch, 'k', linewidth=2.0, label="loss")
+    if NLL_loss_batch is not None:
+        plt.plot(train_batch_num, NLL_loss_batch, 'g', linewidth=2.0, label="NLL_loss")
+    if uncertainty_loss_batch is not None:
+        plt.plot(train_batch_num, uncertainty_loss_batch, 'r', linewidth=2.0, label="uncertainty_loss")
     plt.xlabel(x_axis_label)
     plt.ylabel("loss")
 

@@ -218,6 +218,13 @@ class CollisionGridModel(nn.Module):
 
             # Select the corresponding input positions
             nodes_current = frame[list_of_nodes,:2] # Getting only the x and y of each pedestrian for the input. Leaving th vx and vy
+            # adding pedestrians covariates to the input
+            nodes_current = torch.cat((nodes_current, frame[list_of_nodes,9:13]), 1) 
+
+            # print('========= frame number: ', framenum, ' =========')
+            # print('nodes_current: ', nodes_current)
+            # print('nodes_current shape: ', nodes_current.shape)
+            # print('nodes_current cov part: ', nodes_current[:,2:])
 
             # Get the corresponding grid masks
             grid_current = grids[framenum] 

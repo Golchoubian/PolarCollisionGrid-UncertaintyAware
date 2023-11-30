@@ -94,7 +94,7 @@ def Gaussian2DLikelihood(outputs, targets, nodesPresent, look_up, test=False):
     # Numerical stability
     epsilon = 1e-20
 
-    result = -torch.log(torch.clamp(result, min=epsilon))
+    result = -torch.log(torch.clamp(result, min=epsilon)) #, max=1)) # clipping the probability density function to 1 to prevent negative loss
     results = []
 
     loss = 0
@@ -184,7 +184,7 @@ def revert_seq(x_seq, PedsList_seq, lookup_seq, first_values_dict):
 
 
 
-def revert_postion_change_seq2(x_seq, PedsList_seq, lookup_seq, first_values_dict, orig_x_seq, obs_length, infer=False):
+def revert_postion_change_seq2(x_seq, PedsList_seq, lookup_seq, first_values_dict, orig_x_seq, obs_length, infer=False, KF=True):
     # convert displacement array to absolute position array
     absolute_x_seq = x_seq.clone()
     first_presence_flag = [0]*(x_seq.shape[1])
@@ -198,7 +198,7 @@ def revert_postion_change_seq2(x_seq, PedsList_seq, lookup_seq, first_values_dic
                 first_presence_flag[lookup_seq[ped]] = 1
             else:
                 absolute_x_seq[ind, lookup_seq[ped], 0:2] = frame[lookup_seq[ped], 0:2] + latest_pos[lookup_seq[ped]]
-                if (infer==True and ind>obs_length): # we have to rely on the algorithm's own prediction for the next state
+                if (infer==True and ind>obs_length) or KF==True: # we have to rely on the algorithm's own prediction for the next state
                     latest_pos[lookup_seq[ped]] = absolute_x_seq[ind, lookup_seq[ped], 0:2]
                 else: # we use the ground truth that we have
                     latest_pos[lookup_seq[ped]] = orig_x_seq[ind, lookup_seq[ped], 0:2]
@@ -680,9 +680,17 @@ def cov_mat_generation(dist_param):
         torch.stack([rho_sigma_xy, sigma_y2], dim=-1)
         ], dim=-2)
 
-    for t in range(cov_mat.shape[0]):
-        for ped in range(cov_mat.shape[1]):
-            test_cov = torch.tensor([[sigma_x2[t, ped], rho_sigma_xy[t, ped]], [rho_sigma_xy[t, ped], sigma_y2[t, ped]]])
+    # test_cov = torch.zeros((cov_mat.shape[0], cov_mat.shape[1], 2, 2))
+    # for t in range(cov_mat.shape[0]):
+    #     for ped in range(cov_mat.shape[1]):
+    #         test_cov[t,ped,:,:] = torch.tensor([[sigma_x2[t, ped], rho_sigma_xy[t, ped]], [rho_sigma_xy[t, ped], sigma_y2[t, ped]]])
+    
+    
+    # print('==== check rho ====')
+    # print('rho:', rho[-1,-3])
+    # # print('>>>>> compare <<<<<')
+    # # print('cov_mat:', cov_mat[-1,-3,:,:])
+    # # print('test_cov:', test_cov[-1,-3,:,:])
     
     # I guess there is no need for worrying about the non-existing peds of the corrent steps in the output
     # as the distribution parameters for those peds are all zeros and the cov_mat will be all zeros as well
@@ -746,12 +754,17 @@ def bhattacharyya_distance(mu1, cov1, mu2, cov2):
     mahalanobis_sq = torch.matmul(diff.transpose(-1,-2), torch.matmul(torch.inverse(cov_avg), diff)).squeeze(-1).squeeze(-1)  
     bhattacharyya_coeff = 0.125 * mahalanobis_sq + 0.5 * torch.logdet(cov_avg) - 0.25 * (torch.logdet(cov1) + torch.logdet(cov2))
 
+    # print('cov2:', cov2.reshape(cov2.shape[0], cov2.shape[1],4))
+    # print('det(cov2):', torch.det(cov2))
+
     # Calculate Bhattacharyya distance
     bhatt_distance = bhattacharyya_coeff # -torch.log(torch.exp(-bhattacharyya_coeff))
 
+    # print('bhatt_distance:', bhatt_distance)
+
     return bhatt_distance
 
-def uncertainty_aware_loss(outputs, targets, mask, use_cuda):
+def uncertainty_aware_loss_Point2Dist(outputs, targets, mask, use_cuda):
 
     '''
     params:
@@ -766,7 +779,9 @@ def uncertainty_aware_loss(outputs, targets, mask, use_cuda):
 
     degrees_of_freedom = torch.tensor(2, dtype=torch.int32) # for 2D bi-variant Gaussian distribution
 
-    cov_matrix = cov_mat_generation(outputs)
+    mux, muy, sx, sy, corr = getCoef(outputs)
+    dist_param_seq = torch.stack((mux, muy, sx, sy, corr),2) 
+    cov_matrix = cov_mat_generation(dist_param_seq)
     predicted_covs = torch.tile(torch.tensor([[0.01, 0.0], [0.0, 0.01]]), (seq_length, num_peds, 1, 1))
     if use_cuda:
         predicted_covs = predicted_covs.cuda()
@@ -816,7 +831,9 @@ def uncertainty_aware_loss_Dist2Dist(outputs, targets_mean, targets_cov, mask, u
     seq_length = outputs.size()[0]
     num_peds = outputs.size()[1]
 
-    cov_matrix = cov_mat_generation(outputs)
+    mux, muy, sx, sy, corr = getCoef(outputs)
+    dist_param_seq = torch.stack((mux, muy, sx, sy, corr),2) 
+    cov_matrix = cov_mat_generation(dist_param_seq)
     predicted_covs = torch.tile(torch.tensor([[0.01, 0.0], [0.0, 0.01]]), (seq_length, num_peds, 1, 1))
     if use_cuda:
         predicted_covs = predicted_covs.cuda()
@@ -840,10 +857,10 @@ def uncertainty_aware_loss_Dist2Dist(outputs, targets_mean, targets_cov, mask, u
     
 
 
-def combination_loss(outputs, targets, nodesPresent, look_up, mask, use_cuda ):
+def combination_loss_Point2Dist(outputs, targets, nodesPresent, look_up, mask, use_cuda ):
 
     NLL_loss = Gaussian2DLikelihood(outputs, targets, nodesPresent, look_up)
-    uncertainty_loss = uncertainty_aware_loss(outputs, targets, mask, use_cuda)
+    uncertainty_loss = uncertainty_aware_loss_Point2Dist(outputs, targets, mask, use_cuda)
     loss = NLL_loss + uncertainty_loss
 
     return loss, NLL_loss, uncertainty_loss
@@ -859,7 +876,9 @@ def combination_loss_Dist2Dist(outputs, targets_mean, targets_cov, nodesPresent,
 
 
 
-def KF_covariance_generator(x_seq, mask, dt, plot_bivariate_gaussian3, ax2=None):
+def KF_covariance_generator(x_seq, mask, dt, plot_bivariate_gaussian3=None, ax2=None,
+                            x_orig=None, Pedlist=None, lookup=None, use_cuda=None,
+                            first_values_dict=None, obs_length=None):
 
     '''
     This function is used to generate a distribution around each
@@ -896,27 +915,28 @@ def KF_covariance_generator(x_seq, mask, dt, plot_bivariate_gaussian3, ax2=None)
     # Run Kalman filter
     filtered_states, filtered_covariances = kalman_filter(
         initial_state, initial_covariance, measurements, measurement_noise, process_noise, F, H)
-    
 
     # # ============== test the output by plotting ============
+    # filtered_states_abs = revert_postion_change_seq2(filtered_states.data.cpu(), Pedlist, lookup, 
+    #                                                  first_values_dict, x_orig, obs_length, KF=True)
     # for agent_index in range(x_seq.shape[1]):
     #     for f in range(x_seq.shape[0]):
     #         if mask[f,agent_index] != 0:
-    #             mean = filtered_states[f,agent_index,:2]
+    #             mean = filtered_states_abs[f,agent_index,:2]
     #             cov = filtered_covariances[f,agent_index,:2,:2]
     #             plot_bivariate_gaussian3(mean, cov, ax2, 1)
     #             ax2.plot(mean[0], mean[1], c='b', marker="s", markersize=1)
-    #             ax2.plot(x_seq[f,agent_index,0], x_seq[f,agent_index,1], c='r', marker="s", markersize=1)
+    #             ax2.plot(x_orig[f,agent_index,0], x_orig[f,agent_index,1], c='r', marker="s", markersize=1)
     #     if agent_index == 0:
-    #         ax2.plot(filtered_states[:,agent_index,0], filtered_states[:,agent_index,1], c='b', ls="-", linewidth=1.0, label="filtered")
-    #         ax2.plot(x_seq[:,agent_index,0], x_seq[:,agent_index,1], c='r', ls="-", linewidth=1.0, label="ground truth / measurement")
+    #         ax2.plot(filtered_states_abs[:,agent_index,0], filtered_states_abs[:,agent_index,1], c='b', ls="-", linewidth=1.0, label="filtered")
+    #         ax2.plot(x_orig[:,agent_index,0], x_orig[:,agent_index,1], c='r', ls="-", linewidth=1.0, label="ground truth / measurement")
     #         ax2.legend()
     #     else: 
-    #         ax2.plot(filtered_states[:,agent_index,0], filtered_states[:,agent_index,1], c='b', ls="-", linewidth=1.0)
-    #         ax2.plot(x_seq[:,agent_index,0], x_seq[:,agent_index,1], c='r', ls="-", linewidth=1.0)
+    #         ax2.plot(filtered_states_abs[:,agent_index,0], filtered_states_abs[:,agent_index,1], c='b', ls="-", linewidth=1.0)
+    #         ax2.plot(x_orig[:,agent_index,0], x_orig[:,agent_index,1], c='r', ls="-", linewidth=1.0)
 
     # plt.show()
-    # plt.pause(5)
+    # plt.pause(10)
     # plt.cla()
     # # =====================================================
     
@@ -982,4 +1002,4 @@ def kalman_filter(x, P, measurements, R, Q, F, H):
     # also convert the list of tesors for the filtered state to a single tensor of size (seq_len, num_peds, 4)
     filtered_states = torch.stack(filtered_states, dim=0)
 
-    return filtered_states, filtered_covariances
+    return filtered_states.squeeze(-1), filtered_covariances

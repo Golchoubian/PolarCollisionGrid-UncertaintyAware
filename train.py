@@ -10,6 +10,7 @@ import os
 import pickle
 from visualization import Loss_Plot, plot_bivariate_gaussian3
 from matplotlib import pyplot as plt
+import random
 
 '''
 ## Acknowledgements
@@ -22,7 +23,7 @@ The Social LSTM model itself is also used as a baseline for comparison with our 
 def main():
     parser = argparse.ArgumentParser()
     # RNN size parameter (dimension of the output/hidden state)
-    parser.add_argument('--input_size', type=int, default=2)
+    parser.add_argument('--input_size', type=int, default=6) # adding the covariance matrix to the input, so the input size changes from 2 to 6
     parser.add_argument('--output_size', type=int, default=5)
     # RNN size parameter (dimension of the output/hidden state)
     parser.add_argument('--rnn_size', type=int, default=128,
@@ -127,6 +128,14 @@ def main():
     # method selection
     parser.add_argument('--method', type=int, default=4,
                             help='Method of lstm will be used (1 = social lstm, 3 = vanilla lstm, 4 = collision grid)') 
+     
+    # resume training from an existing checkpoint or not
+    parser.add_argument(
+        '--resume', default=False, action='store_true')
+    # if resume = True, load from the following checkpoint
+    parser.add_argument(
+        '--resume-model-path', default='Store_Results/model/saved_model/SOCIALLSTM_lstm_model_55.tar',
+        help='path of weights for resume training')
 
 
     args = parser.parse_args()
@@ -164,7 +173,11 @@ def train(args):
     def checkpoint_path(x):
         return os.path.join(save_directory, save_tar_name+str(x)+'.tar')
 
-
+    # SEED = 5
+    # random.seed(SEED)
+    # np.random.seed(SEED)
+    # torch.manual_seed(SEED)
+    # torch.cuda.manual_seed(SEED)
 
     # Create the data loader object. This object would preprocess the data in terms of
     # batches each of size args.batch_size, and of length args.seq_length
@@ -175,6 +188,18 @@ def train(args):
     net = get_model(args.method,args)
     if args.use_cuda:
         net = net.cuda()
+
+    if args.resume:
+        # Get the checkpoint path for loading the trained model
+        model_checkpoint_path = args.resume_model_path
+        if os.path.isfile(model_checkpoint_path):
+            print('Loading checkpoint')
+            checkpoint = torch.load(model_checkpoint_path)
+            model_epoch = checkpoint['epoch']
+            net.load_state_dict(checkpoint['state_dict'])
+            print('Loaded checkpoint at epoch', model_epoch)
+        else:
+            raise ValueError('The seleted model checkpoint does not exists in the specified directory!')
 
     optimizer = torch.optim.RMSprop(net.parameters(), lr=args.learning_rate)
     # optimizer = torch.optim.RMSprop(net.parameters(), lr=args.learning_rate, weight_decay=args.lambda_param)
@@ -201,9 +226,14 @@ def train(args):
     train_batch_num_list = []
     loss_epoch_list = []
     err_epoch_list = []
+    NLL_loss_batch_list = []
+    uncertainty_loss_batch_list = []
+    NLL_loss_epoch_list = []
+    uncertainty_loss_epoch_list = []
 
-    fig2, ax2 = plt.subplots()
-    plt.ion()
+    ax2 = None
+    # fig2, ax2 = plt.subplots()
+    # plt.ion()
 
     # Training
     for epoch in range(args.num_epochs):
@@ -211,6 +241,8 @@ def train(args):
         print('**************** Training epoch beginning ******************')
         dataloader.reset_batch_pointer(valid=False)
         loss_epoch = 0
+        NLL_loss_epoch = 0
+        uncertainty_loss_epoch = 0
         err_epoch = 0
 
         # changing the order of the sequence if shuffle in on
@@ -233,6 +265,8 @@ def train(args):
 
             loss_batch = 0
             err_batch = 0
+            NLL_loss_batch = 0
+            uncertainty_loss_batch = 0
 
             # Zero out gradients
             net.zero_grad()
@@ -252,8 +286,8 @@ def train(args):
                 x_seq_orig = x_seq.clone()
                 x_seq_veh_orig = x_seq_veh.clone()
 
-                # create thec covaraince matrix using kalman filter and add it to x_seq
-                GT_filtered_state, GT_covariance = KF_covariance_generator(x_seq, mask, dataloader.timestamp, plot_bivariate_gaussian3, ax2) # the last two arguments are for testing the KF with ploting the bivariate gaussian
+                # # create thec covaraince matrix using kalman filter and add it to x_seq
+                # GT_filtered_state, GT_covariance = KF_covariance_generator(x_seq, mask, dataloader.timestamp, plot_bivariate_gaussian3, ax2) # the last two arguments are for testing the KF with ploting the bivariate gaussian
 
                 if args.store_grid:
                    grid_seq =  grids_batch[sequence]
@@ -281,16 +315,27 @@ def train(args):
                 x_seq, first_values_dict = position_change_seq(x_seq, PedsList_seq, lookup_seq)
                 x_seq_veh, first_values_dict_veh = position_change_seq(x_seq_veh, VehsList_seq, lookup_seq_veh)
 
-                GT_filt_pos, _ = position_change_seq(GT_filtered_state, PedsList_seq, lookup_seq)
+                # create the covaraince matrix using kalman filter and add it to x_seq
+                GT_filtered_disp, GT_covariance = KF_covariance_generator(x_seq, mask, dataloader.timestamp,
+                                                                          plot_bivariate_gaussian3, ax2,
+                                                                          x_seq_orig[:,:,:2], PedsList_seq, lookup_seq, args.use_cuda,
+                                                                          first_values_dict, args.obs_length) 
+                                                                        # the last arguments are for testing the KF with ploting the bivariate gaussian
+
+                # add the covariances to x_seq
+                covariance_flat = GT_covariance.reshape(GT_covariance.shape[0], GT_covariance.shape[1], 4)
+                # x_seq up to here: [x, y, vx, vy, timestamp, ax, ay, speed_change, heading_change]
+                x_seq = torch.cat((x_seq, covariance_flat), dim=2) 
+                # x_seq: [x, y, vx, vy, timestamp, ax, ay, speed_change, heading_change, cov11, cov12, cov21, cov22]
 
                 if args.use_cuda:                    
                     x_seq = x_seq.cuda()
                     x_seq_veh = x_seq_veh.cuda()
                     mask = mask.cuda()
-                    GT_filt_pos = GT_filt_pos.cuda()
+                    GT_filtered_disp = GT_filtered_disp.cuda()
                     GT_covariance = GT_covariance.cuda()
 
-                y_dist_mean = GT_filt_pos[1:,:,:2]
+                y_dist_mean = GT_filtered_disp[1:,:,:2]
                 y_dis_cov = GT_covariance[1:,:,:2,:2]
                 
                 y_seq = x_seq[1:,:,:2]
@@ -341,7 +386,7 @@ def train(args):
                 # Compute loss
                 # loss = Gaussian2DLikelihood(outputs, y_seq, PedsList_seq[1:], lookup_seq)
                 # loss = uncertainty_aware_loss(outputs, y_seq, mask[1:], args.use_cuda)
-                # loss, NLL_loss, uncertainty_loss = combination_loss(outputs, y_seq,  PedsList_seq[1:], lookup_seq, mask[1:], args.use_cuda)
+                # loss, NLL_loss, uncertainty_loss = combination_loss_Point2Dist(outputs, y_seq,  PedsList_seq[1:], lookup_seq, mask[1:], args.use_cuda)
                 loss, NLL_loss, uncertainty_loss = combination_loss_Dist2Dist(outputs, y_seq, y_dis_cov, PedsList_seq[1:], lookup_seq, mask[1:], args.use_cuda)
                 # print('<<<<<<<<<<<<<>>>>>>>>>>>>>')
                 # print('loss: {}'.format(loss))
@@ -349,6 +394,11 @@ def train(args):
                 # print("uncertainty_loss: {}".format(uncertainty_loss))
                 loss = loss / dataloader.batch_size
                 loss_batch += loss.item()
+
+                NLL_loss = NLL_loss / dataloader.batch_size
+                uncertainty_loss = uncertainty_loss / dataloader.batch_size
+                NLL_loss_batch += NLL_loss.item()
+                uncertainty_loss_batch += uncertainty_loss.item()
 
                 # Compute gradients
                 # Cumulating gradient until we reach our required batch size and then updating one the weights
@@ -370,7 +420,11 @@ def train(args):
             err_batch = err_batch / dataloader.batch_size
             err_batch_list.append(err_batch)
             loss_batch_list.append(loss_batch)
+            NLL_loss_batch_list.append(NLL_loss_batch)
+            uncertainty_loss_batch_list.append(uncertainty_loss_batch)
             loss_epoch += loss_batch
+            NLL_loss_epoch += NLL_loss_batch
+            uncertainty_loss_epoch += uncertainty_loss_batch
             err_epoch += err_batch
             num_batch+=1
 
@@ -382,13 +436,19 @@ def train(args):
             train_batch_num = epoch * dataloader.num_batches + batch
             train_batch_num_list.append(train_batch_num)
             if (train_batch_num%50 == 0):
-                Loss_Plot(train_batch_num_list, err_batch_list, loss_batch_list, "loss_plot_batch", "training batch number")
+                Loss_Plot(train_batch_num_list, err_batch_list, loss_batch_list, "loss_plot_batch", "training batch number",
+                          NLL_loss_batch_list, uncertainty_loss_batch_list)
 
         loss_epoch /= dataloader.num_batches
+        NLL_loss_epoch /= dataloader.num_batches
+        uncertainty_loss_epoch /= dataloader.num_batches
         err_epoch /= dataloader.num_batches
         loss_epoch_list.append(loss_epoch)
+        NLL_loss_epoch_list.append(NLL_loss_epoch)
+        uncertainty_loss_epoch_list.append(uncertainty_loss_epoch)
         err_epoch_list.append(err_epoch)
-        Loss_Plot(range(epoch+1), err_epoch_list, loss_epoch_list, "loss_plot_epoch", "epoch")
+        Loss_Plot(range(epoch+1), err_epoch_list, loss_epoch_list, "loss_plot_epoch", "epoch",
+                  NLL_loss_epoch_list, uncertainty_loss_epoch_list)
 
         # Log loss values
         log_file_curve.write("Training epoch: "+str(epoch)+" loss: "+str(loss_epoch)+" error: "+str(err_epoch)+'\n')
