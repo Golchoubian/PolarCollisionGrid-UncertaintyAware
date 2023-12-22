@@ -1,7 +1,7 @@
 
 import torch
 import numpy as np
-from model_CollisionGrid import CollisionGridModel
+from model_CollisionGrid_NonTeacherForcing import CollisionGridModel_NonTF
 from model_SocialLSTM import SocialModel
 from model_VanillaLSTM import VLSTMModel
 from torch.autograd import Variable
@@ -128,7 +128,7 @@ def get_model(index, arguments, infer = False):
     if index == 1:
         return SocialModel(arguments, infer)
     elif index == 4:
-        return CollisionGridModel(arguments, infer)
+        return CollisionGridModel_NonTF(arguments, infer)
     elif index == 3:
         return VLSTMModel(arguments, infer)
     else:
@@ -584,8 +584,10 @@ def Delta_Empirical_Sigma_Value(dist_param, orig_x, PedsList, PedsList_obs, usin
     i-sigma level set of the predicted distribution and the fraction from
     an ideal Gaussian
     '''
+    mux, muy, sx, sy, corr = getCoef(dist_param)
+    _dist_param = torch.stack((mux, muy, sx, sy, corr),2) 
 
-    cov_matrix = cov_mat_generation(dist_param)
+    cov_matrix = cov_mat_generation(_dist_param)
     # exclud those peds from the PedList that we did not have any observation data from them
     for f in range(len(PedsList)):
         PedsList[f] = [i for i in PedsList[f] if i in PedsList_obs]
@@ -600,11 +602,11 @@ def Delta_Empirical_Sigma_Value(dist_param, orig_x, PedsList, PedsList_obs, usin
             counter += 1 
             ped_indx = lookup[ped]
             is_in_1_sigma += within_sigma_levels(orig_x[f,ped_indx,:],
-                                                dist_param[f, ped_indx, 0:2], cov_matrix[f,ped_indx])[0]
+                                                _dist_param[f, ped_indx, 0:2], cov_matrix[f,ped_indx])[0]
             is_in_2_sigma += within_sigma_levels(orig_x[f,ped_indx,:],
-                                                dist_param[f, ped_indx, 0:2], cov_matrix[f,ped_indx])[1]
+                                                _dist_param[f, ped_indx, 0:2], cov_matrix[f,ped_indx])[1]
             is_in_3_sigma += within_sigma_levels(orig_x[f,ped_indx,:], 
-                                                dist_param[f, ped_indx, 0:2], cov_matrix[f,ped_indx])[2]
+                                                _dist_param[f, ped_indx, 0:2], cov_matrix[f,ped_indx])[2]
             
     # leave the calculation of the fraction to when we have the predictions for all the data in test set
     # and just report the difference and the counter here
@@ -652,7 +654,7 @@ def reverse_dict(lookup):
     
     return reversedDict
 
-def cov_mat_generation(dist_param):
+def cov_mat_generation(dist_param): # the input should be dist_param after the scaling has been done in the gen_Coef
         
     '''
     Generating the covanriance matrix from the distribution parameters
