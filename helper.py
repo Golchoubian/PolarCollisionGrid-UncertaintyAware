@@ -1,7 +1,7 @@
 
 import torch
 import numpy as np
-from model_CollisionGrid_NonTeacherForcing import CollisionGridModel_NonTF
+from model_CollisionGrid_NonTF import CollisionGridModel_NonTF
 from model_SocialLSTM import SocialModel
 from model_VanillaLSTM import VLSTMModel
 from torch.autograd import Variable
