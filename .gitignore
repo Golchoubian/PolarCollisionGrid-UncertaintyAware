@@ -170,3 +170,4 @@ cython_debug/
 /Store_Results/Increaing batch_size to 100
 /Store_Results/Just Dist2Dist uncertainty loss
 
+/Store_Results/model/
