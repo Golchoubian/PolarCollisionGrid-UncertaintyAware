@@ -136,7 +136,9 @@ def main():
     parser.add_argument(
         '--resume-model-path', default='Store_Results/model/saved_model/SOCIALLSTM_lstm_model_55.tar',
         help='path of weights for resume training')
-
+    
+    parser.add_argument('--teacher_forcing', action="store_true", default=False,
+                        help='Whether to use teacher forcing or not during training')
 
     args = parser.parse_args()
 
@@ -343,7 +345,7 @@ def train(args):
                 numPedsList_seq = numPedsList_seq[:-1]
              
                 y_seq_veh = x_seq_veh[1:,:,:2]
-                x_seq_veh = x_seq_veh[:-1,:,:]
+                x_seq_veh = x_seq_veh[:,:,:] # x_seq_veh[:-1,:,:]
                 numVehsList_seq = numVehsList_seq[:-1]
                
 
@@ -360,6 +362,8 @@ def train(args):
 
                 #number of peds in this sequence per frame
                 numNodes = len(lookup_seq) 
+                if lookup_seq_veh is not None:
+                    numx_seq_veh = len(lookup_seq_veh)
 
 
                 hidden_states = Variable(torch.zeros(numNodes, args.rnn_size))
@@ -371,18 +375,130 @@ def train(args):
                     cell_states = cell_states.cuda()
 
                 # Forward prop
-                if args.method == 3: # Vanillar LSTM
-                    outputs, _, _ = net(x_seq, hidden_states, cell_states, PedsList_seq[:-1], numPedsList_seq ,dataloader, lookup_seq) 
-                elif args.method == 4: # Collision Grid
-                    outputs, _, _ = net(x_seq, grid_seq, hidden_states, cell_states, PedsList_seq[:-1], numPedsList_seq ,dataloader,
-                                            lookup_seq, x_seq_veh, grid_seq_veh_in_ped, VehsList_seq[:-1], lookup_seq_veh, grid_TTC_seq,
-                                            grid_TTC_veh_seq) 
-                elif args.method == 1: # Social LSTM
-                    outputs, _, _ = net(x_seq, grid_seq, hidden_states, cell_states, PedsList_seq[:-1], numPedsList_seq ,dataloader, 
-                                            lookup_seq, x_seq_veh, grid_seq_veh_in_ped, VehsList_seq[:-1], lookup_seq_veh) 
-                else:
-                    raise ValueError("Method is not defined")
-              
+                if args.teacher_forcing:
+
+                    if args.method == 3: # Vanillar LSTM
+                        outputs, _, _ = net(x_seq, hidden_states, cell_states, PedsList_seq[:-1], numPedsList_seq ,dataloader, lookup_seq) 
+                    elif args.method == 4: # Collision Grid
+                        outputs, _, _ = net(x_seq, grid_seq, hidden_states, cell_states, PedsList_seq[:-1], numPedsList_seq ,dataloader,
+                                                lookup_seq, x_seq_veh, grid_seq_veh_in_ped, VehsList_seq[:-1], lookup_seq_veh, grid_TTC_seq,
+                                                grid_TTC_veh_seq) 
+                    elif args.method == 1: # Social LSTM
+                        outputs, _, _ = net(x_seq, grid_seq, hidden_states, cell_states, PedsList_seq[:-1], numPedsList_seq ,dataloader, 
+                                                lookup_seq, x_seq_veh, grid_seq_veh_in_ped, VehsList_seq[:-1], lookup_seq_veh) 
+                    else:
+                        raise ValueError("Method is not defined")
+                    
+                else: # not teacher forcing
+
+                    outputs = Variable(torch.zeros((args.seq_length-1), numNodes, args.output_size))
+                    ret_x_seq = Variable(torch.zeros((args.seq_length), numNodes, x_seq.shape[2]))
+                    if args.use_cuda:
+                        outputs = outputs.cuda()
+                        ret_x_seq = ret_x_seq.cuda()
+
+                    for tstep in range(args.obs_length-1):
+                        if args.method == 3: # Vanillar LSTM             
+                            output_obs, hidden_states, cell_states = net(x_seq[tstep].view(1, numNodes, x_seq.shape[2]),
+                                                                            hidden_states, cell_states,
+                                                                            [PedsList_seq[tstep]], [numPedsList_seq[tstep]],
+                                                                            dataloader, lookup_seq)
+                            
+                        elif args.method == 4: # Collision Grid
+                            output_obs, hidden_states, cell_states = net(x_seq[tstep].view(1, numNodes, x_seq.shape[2]),
+                                                                            [grid_seq[tstep]], hidden_states, cell_states,
+                                                                            [PedsList_seq[tstep]], [numPedsList_seq[tstep]],
+                                                                            dataloader, lookup_seq,
+                                                                            x_seq_veh[tstep].view(1, numx_seq_veh, x_seq_veh.shape[2]),
+                                                                            [grid_seq_veh_in_ped[tstep]], [VehsList_seq[tstep]], lookup_seq_veh,
+                                                                            [grid_TTC_seq[tstep]], [grid_TTC_veh_seq[tstep]])
+                        elif args.method == 1: # Social LSTM
+                            output_obs, hidden_states, cell_states = net(x_seq[tstep].view(1, numNodes, x_seq.shape[2]),
+                                                                            [grid_seq[tstep]], hidden_states, cell_states,
+                                                                            [PedsList_seq[tstep]], [numPedsList_seq[tstep]],
+                                                                            dataloader, lookup_seq,
+                                                                            x_seq_veh[tstep].view(1, numx_seq_veh, x_seq_veh.shape[2]),
+                                                                            None, [VehsList_seq[tstep]], lookup_seq_veh)
+                        outputs[tstep] = output_obs
+                        ret_x_seq[tstep+1,:,:2] = output_obs[:,:,:2] # these are the mean of the gaussian distribution
+                    
+                    # Last seen grid
+                    if args.method != 3: # not vanilla lstm
+                        prev_grid = [grid_seq[args.obs_length-1].clone()]
+                        if (args.method == 4):
+                            prev_grid_veh_in_ped = [grid_seq_veh_in_ped[args.obs_length-1].clone()]
+                            prev_TTC_grid = [grid_TTC_seq[args.obs_length-1].clone()]
+                            prev_TTC_grid_veh = [grid_TTC_veh_seq[args.obs_length-1].clone()]
+                    # last observed position
+                    ret_x_seq[args.obs_length-1,:,2:] = x_seq[args.obs_length-1,:,2:] # these are the mean of the gaussian distribution
+                  
+                    # rely on the output itself from now on
+                    for tstep in range(args.obs_length-1, args.seq_length-1):
+
+                        # froward prop
+                        if args.method == 3:
+                            outputs_pred, hidden_states, cell_states = net(ret_x_seq[tstep].view(1, numNodes, ret_x_seq.shape[2]),
+                                                                            hidden_states, cell_states,
+                                                                            [PedsList_seq[tstep]], [numPedsList_seq[tstep]],
+                                                                            dataloader, lookup_seq) 
+                        elif args.method == 4: 
+                            outputs_pred, hidden_states, cell_states = net(ret_x_seq[tstep].view(1, numNodes, ret_x_seq.shape[2]),
+                                                                            prev_grid, hidden_states, cell_states,
+                                                                            [PedsList_seq[tstep]], [numPedsList_seq[tstep]],
+                                                                            dataloader, lookup_seq,
+                                                                            x_seq_veh[tstep].view(1, numx_seq_veh, x_seq_veh.shape[2]),
+                                                                            prev_grid_veh_in_ped, [VehsList_seq[tstep]], lookup_seq_veh,
+                                                                            prev_TTC_grid, prev_TTC_grid_veh)
+                        elif args.method == 1:
+                            outputs_pred, hidden_states, cell_states = net(ret_x_seq[tstep].view(1, numNodes, ret_x_seq.shape[2]),
+                                                                            prev_grid, hidden_states, cell_states,
+                                                                            [PedsList_seq[tstep]], [numPedsList_seq[tstep]],
+                                                                            dataloader, lookup_seq,
+                                                                            x_seq_veh[tstep].view(1, numx_seq_veh, x_seq_veh.shape[2]),
+                                                                            None, [VehsList_seq[tstep]], lookup_seq_veh)
+                
+                        outputs[tstep] = outputs_pred
+                        ret_x_seq[tstep+1,:,:2] = outputs_pred[:,:,:2] # note: the first dimension of ret_x_seq is one more than the outputs
+
+                        # updating the velocity and other features based on the prediction output
+                        # order of featurs in x_seq: [x, y, vx, vy, timestamp, ax, ay, speed_change, heading_change, cov11, cov12, cov21, cov22]
+                        ret_x_seq_convert = ret_x_seq.clone() 
+                        ret_x_seq_convert = revert_postion_change_seq2(ret_x_seq.cpu(), PedsList_seq, lookup_seq,
+                                                                        first_values_dict, x_seq_orig, args.obs_length, infer=True)
+                        ret_x_seq_convert[tstep+1, :, 2] = (ret_x_seq_convert[tstep+1, :, 0] - ret_x_seq_convert[tstep, :, 0]) / dataloader.timestamp # vx 
+                        ret_x_seq_convert[tstep+1, :, 3] = (ret_x_seq_convert[tstep+1, :, 1] - ret_x_seq_convert[tstep, :, 1]) / dataloader.timestamp # vy
+                        # updating the velocity data in ret_x_seq accordingly
+                        ret_x_seq[tstep+1, :, 2] = ret_x_seq_convert[tstep+1, :, 2].clone()
+                        ret_x_seq[tstep+1, :, 3] = ret_x_seq_convert[tstep+1, :, 3].clone()
+
+                        # Extract the mean, std and corr of the bivariate Gaussian
+                        mux, muy, sx, sy, corr = getCoef(outputs[tstep].cpu().view(1, numNodes, args.output_size)) # parameters of the gaussian distribution (scaled)
+                        scaled_param_dist = torch.stack((mux, muy, sx, sy, corr),2) 
+                        cov = cov_mat_generation(scaled_param_dist)
+                        ret_x_seq[tstep+1, :, 9:13] = cov.reshape(cov.shape[0], cov.shape[1], 4).squeeze(0) # covariances of the trajectories generated by the predictor
+
+                        if args.method == 1: #social lstm 
+                          prev_grid = getSequenceGridMask(ret_x_seq_convert[tstep+1].cpu().view(1, numNodes, ret_x_seq.shape[2]),
+                                                            [PedsList_seq[tstep+1]], args.neighborhood_size, args.grid_size,
+                                                            args.use_cuda, lookup_seq)
+                          
+                        elif args.method == 4: #collision grid
+                            prev_grid, prev_TTC_grid = getSequenceInteractionGridMask(
+                                                                                    ret_x_seq_convert[tstep+1].cpu().view(1, numNodes, ret_x_seq.shape[2]),
+                                                                                    [PedsList_seq[tstep+1]], 
+                                                                                    ret_x_seq_convert[tstep+1].cpu().view(1, numNodes, ret_x_seq.shape[2]),
+                                                                                    [PedsList_seq[tstep+1]], args.TTC,
+                                                                                    args.D_min, args.num_sector, args.use_cuda, 
+                                                                                    lookup_seq, lookup_seq)
+                            prev_grid_veh_in_ped, prev_TTC_grid_veh = getSequenceInteractionGridMask(
+                                                                                    ret_x_seq_convert[tstep+1].cpu().view(1, numNodes, ret_x_seq.shape[2]),
+                                                                                    [PedsList_seq[tstep+1]],
+                                                                                    x_seq_veh[tstep+1].cpu().view(1, numx_seq_veh, x_seq_veh.shape[2]),
+                                                                                    [VehsList_seq[tstep+1]],
+                                                                                    args.TTC_veh, args.D_min_veh, args.num_sector,
+                                                                                    args.use_cuda, lookup_seq, lookup_seq_veh,
+                                                                                    is_heterogeneous=True, is_occupancy=False) 
+
                 # Compute loss
                 # loss = Gaussian2DLikelihood(outputs, y_seq, PedsList_seq[1:], lookup_seq)
                 # loss = uncertainty_aware_loss(outputs, y_seq, mask[1:], args.use_cuda)

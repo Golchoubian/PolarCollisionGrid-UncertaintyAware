@@ -24,7 +24,10 @@ class CollisionGridModel(nn.Module):
             self.seq_length = 2 
         else:
             # Training time
-            self.seq_length = args.seq_length
+            if args.teacher_forcing:
+                self.seq_length = args.seq_length
+            else:
+                self.seq_length = 2
 
         # Store required sizes
         self.rnn_size = args.rnn_size

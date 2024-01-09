@@ -1,7 +1,7 @@
 
 import torch
 import numpy as np
-from model_CollisionGrid_NonTF import CollisionGridModel_NonTF
+from model_CollisionGrid import CollisionGridModel
 from model_SocialLSTM import SocialModel
 from model_VanillaLSTM import VLSTMModel
 from torch.autograd import Variable
@@ -128,7 +128,7 @@ def get_model(index, arguments, infer = False):
     if index == 1:
         return SocialModel(arguments, infer)
     elif index == 4:
-        return CollisionGridModel_NonTF(arguments, infer)
+        return CollisionGridModel(arguments, infer)
     elif index == 3:
         return VLSTMModel(arguments, infer)
     else:
