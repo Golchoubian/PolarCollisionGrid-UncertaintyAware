@@ -41,11 +41,11 @@ def main():
 
     # Model to be loaded (saved model (the epoch #) during training
     # with the best performace according to previous invesigation on valiquation set)
-    parser.add_argument('--epoch', type=int, default= 200, # 115, # 181, 3, 196
+    parser.add_argument('--epoch', type=int, default= 190, # 115, # 181, 3, 196
                             help='Epoch of model to be loaded')
     
     # The number of samples to be generated for each test data, when reporting its performance
-    parser.add_argument('--sample_size', type=int, default=1,
+    parser.add_argument('--sample_size', type=int, default=20,
                             help='The number of sample trajectory that will be generated')
         
 
@@ -104,7 +104,7 @@ def main():
     # This iteration is for testing the results for different stages of the trained model
     # (the stored paramters of the model at different iterations)
     start_iteration = 0
-    for iteration in range(start_iteration, sample_args.iteration): 
+    for iteration in [0]: #range(start_iteration, sample_args.iteration): 
         # Initialize net
         net = get_model(sample_args.method, saved_args, True)
 
@@ -112,8 +112,8 @@ def main():
             net = net.cuda()  
 
         # Get the checkpoint path for loading the trained model
-        checkpoint_path = os.path.join(save_directory, save_tar_name+str(iteration)+'.tar')
-        # checkpoint_path = os.path.join(save_directory, save_tar_name+str(sample_args.epoch)+'.tar')
+        # checkpoint_path = os.path.join(save_directory, save_tar_name+str(iteration)+'.tar')
+        checkpoint_path = os.path.join(save_directory, save_tar_name+str(sample_args.epoch)+'.tar')
         if os.path.isfile(checkpoint_path):
             print('Loading checkpoint')
             checkpoint = torch.load(checkpoint_path)
@@ -206,6 +206,9 @@ def main():
             # x_seq up to here: [x, y, vx, vy, timestamp, ax, ay, speed_change, heading_change]
             x_seq = torch.cat((x_seq, covariance_flat), dim=2) 
             # x_seq: [x, y, vx, vy, timestamp, ax, ay, speed_change, heading_change, cov11, cov12, cov21, cov22]
+
+            # adding the GT covariances to the x_orgi_seq for plotting them later on in the visualization
+            orig_x_seq = torch.cat((orig_x_seq, covariance_flat), dim=2)
          
             if sample_args.use_cuda:
                 x_seq = x_seq.cuda()
@@ -340,10 +343,10 @@ def main():
 
             # Deciding the best sample based on the average displacement error
             # We don't get the best sample of each individual. We get the best sample of all the agents in one batch (kind of average). This is a limitation
-            # min_ADE = min(sample_error)
-            # min_index = sample_error.index(min_ADE)
-            min_NLL = min(sample_NLL_loss)
-            min_index = sample_NLL_loss.index(min_NLL)
+            min_ADE = min(sample_error)
+            min_index = sample_error.index(min_ADE)
+            # min_NLL = min(sample_NLL_loss)
+            # min_index = sample_NLL_loss.index(min_NLL)
 
             total_error += sample_error[min_index] # or min_ADE
             final_error += sample_final_error[min_index]
@@ -414,22 +417,22 @@ def main():
         # print('None count for MHD calculation:', None_count)
 
         
-        # if total_error<smallest_err:
-        #     print("**********************************************************")
-        #     print('Best iteration has been changed. Previous best iteration: ', smallest_err_iter_num+1, 'Error: ',
-        #            smallest_err / dataloader.num_batches)
-        #     print('New best iteration : ', iteration+1, 'Error: ',total_error / dataloader.num_batches)
-        #     smallest_err_iter_num = iteration
-        #     smallest_err = total_error
-
-        # using the NLL for deciding on the best model/iteration
-        if NLL_mean<smallest_err:
+        if total_error<smallest_err:
             print("**********************************************************")
             print('Best iteration has been changed. Previous best iteration: ', smallest_err_iter_num+1, 'Error: ',
-                   smallest_err)
-            print('New best iteration : ', iteration+1, 'Error: ',NLL_mean)
+                   smallest_err / dataloader.num_batches)
+            print('New best iteration : ', iteration+1, 'Error: ',total_error / dataloader.num_batches)
             smallest_err_iter_num = iteration
-            smallest_err = NLL_mean
+            smallest_err = total_error
+
+        # using the NLL for deciding on the best model/iteration
+        # if NLL_mean<smallest_err:
+        #     print("**********************************************************")
+        #     print('Best iteration has been changed. Previous best iteration: ', smallest_err_iter_num+1, 'Error: ',
+        #            smallest_err)
+        #     print('New best iteration : ', iteration+1, 'Error: ',NLL_mean)
+        #     smallest_err_iter_num = iteration
+        #     smallest_err = NLL_mean
 
     dataloader.write_to_plot_file(iteration_result[smallest_err_iter_num], os.path.join(plot_directory, plot_test_file_directory)) 
 
@@ -455,14 +458,14 @@ def main():
     print('ESV_sigma3: ', iteration_ESV_sigma3[smallest_err_iter_num])
 
     
-    plt.subplot(2,1,1)
-    plt.plot(range(start_iteration,sample_args.iteration), iteration_total_error, 'b', linewidth=2.0, label="ADE")
-    plt.ylabel("ADE")
-    plt.subplot(2,1,2)
-    plt.plot(range(start_iteration,sample_args.iteration), iteration_final_error, 'k', linewidth=2.0, label="FDE")
-    plt.xlabel('epoch number of the stored trained model')
-    plt.ylabel("FDE")
-    plt.savefig("Store_Results/plot/test/test_error.png")
+    # plt.subplot(2,1,1)
+    # plt.plot(range(start_iteration,sample_args.iteration), iteration_total_error, 'b', linewidth=2.0, label="ADE")
+    # plt.ylabel("ADE")
+    # plt.subplot(2,1,2)
+    # plt.plot(range(start_iteration,sample_args.iteration), iteration_final_error, 'k', linewidth=2.0, label="FDE")
+    # plt.xlabel('epoch number of the stored trained model')
+    # plt.ylabel("FDE")
+    # plt.savefig("Store_Results/plot/test/test_error.png")
 
 
 def sample(x_seq, Pedlist, args, net, true_x_seq, true_Pedlist, saved_args, dataloader, look_up, num_pedlist, is_gru,
@@ -576,6 +579,11 @@ def sample(x_seq, Pedlist, args, net, true_x_seq, true_Pedlist, saved_args, data
         ret_x_seq[tstep + 1, :, 8] = x_seq[-1,:,8]
         ret_x_seq[tstep + 1, :, 9:13] = x_seq[-1,:,9:13] # covariances of the trjecotries generated by the Kalman filter
 
+        last_observed_frame_prediction = ret_x_seq[tstep + 1, :, :2].clone()
+        ret_x_seq[tstep + 1, :, :2] = x_seq[-1,:,:2] # storing the last GT observed frame here to ensure this is used in the next for loop and then 
+        # storing the actual prediction in it after the forward network is run for the first step in the prediction length 
+
+
         timestamp = dataloader.timestamp
 
         # For the predicted part of the trajectory
@@ -596,6 +604,9 @@ def sample(x_seq, Pedlist, args, net, true_x_seq, true_Pedlist, saved_args, data
                                                                 hidden_states, cell_states, [true_Pedlist[tstep]], [num_pedlist[tstep]],
                                                                 dataloader, look_up, x_seq_veh[tstep,:,:].view(1, numx_seq_veh, x_seq_veh.shape[2]),
                                                                 None, [Vehlist[tstep]], look_up_veh)
+            if tstep == args.obs_length-1: 
+                # storing the actual prediction in the last observed frame position
+                ret_x_seq[args.obs_length-1, :, :2] = last_observed_frame_prediction.clone()
       
             # Extract the mean, std and corr of the bivariate Gaussian
             mux, muy, sx, sy, corr = getCoef(outputs.cpu())
@@ -647,7 +658,7 @@ def sample(x_seq, Pedlist, args, net, true_x_seq, true_Pedlist, saved_args, data
 
          
             scaled_param_dist = torch.stack((mux, muy, sx, sy, corr),2) 
-            cov = cov_mat_generation(scaled_param_dist.unsqueeze(0))
+            cov = cov_mat_generation(scaled_param_dist)
             ret_x_seq[tstep + 1, :, 9:13] = cov.reshape(cov.shape[0], cov.shape[1], 4).squeeze(0) # covariances of the trjecotries generated by the predictor
 
             # List of x_seq at the last time-step (assuming they exist until the end)
