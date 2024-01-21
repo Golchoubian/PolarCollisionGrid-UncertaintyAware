@@ -5,7 +5,7 @@ from matplotlib import pyplot as plt
 from scipy.stats import multivariate_normal
 import string
 from matplotlib.patches import Ellipse
-from helper import cov_mat_generation
+from helper import cov_mat_generation, getCoef
 import torch
 
 def get_cmap(n, name='hsv'):
@@ -43,7 +43,9 @@ def plot_trajecotries(true_trajectories,pred_trajectories,pred_trajectories_Soci
     ax.set_xlim(min_x, max_x)
     ax.set_ylim(min_y, max_y)
 
-    cov_matrix = cov_mat_generation(dist_param_seq)
+    mux, muy, sx, sy, corr = getCoef(dist_param_seq)
+    scaled_param_dist = torch.stack((mux, muy, sx, sy, corr), 2)
+    cov_matrix = cov_mat_generation(scaled_param_dist)
     # print('cov_matrix.shape: ', cov_matrix.shape)
 
 
@@ -118,6 +120,11 @@ def plot_trajecotries(true_trajectories,pred_trajectories,pred_trajectories_Soci
         all_frame = obs_frame_nums + pred_frame_nums
         ax.plot(true_trajectories[all_frame,agent_index,0], true_trajectories[all_frame,agent_index,1],
                   c='0.0', linewidth=2.0, alpha=alpha_val)
+        # plot the Ground truth covariance
+        for f in pred_frame_nums:
+            GT_mean = true_trajectories[f,agent_index,:2]
+            GT_cov = true_trajectories[f,agent_index,9:13].reshape(2,2)
+            plot_bivariate_gaussian3(GT_mean, GT_cov, ax, 1, 'k')
 
       
     max_size_veh = 6
@@ -159,14 +166,20 @@ def plot_trajecotries(true_trajectories,pred_trajectories,pred_trajectories_Soci
                 ego_agent = agent_i # index number of the ego agent in the trajectroy data tesnor of the sequence 
                 ax.plot(pred_trajectories[frame_i, agent_i,0], pred_trajectories[frame_i, agent_i,1], 
                          color='b', marker="*", markersize=11)
-            
+                ax.plot(true_trajectories[frame_i, agent_i,0], true_trajectories[frame_i, agent_i,1], 
+                            color='k', marker="*", markersize=11)
+
             elif (any(grid_seq[frame_i][ego_agent_indx_in_pedlist,indx,:])): # This agent is in the grid of the ego agent.
                 ax.plot(pred_trajectories[frame_i, agent_i,0], pred_trajectories[frame_i, agent_i,1], 
                          color='b', marker="s", markersize=7)
+                ax.plot(true_trajectories[frame_i, agent_i,0], true_trajectories[frame_i, agent_i,1], 
+                         color='k', marker="s", markersize=7)
               
             else: # This agent is presnet but not in the gird of the ego agent
                 ax.plot(pred_trajectories[frame_i, agent_i,0], pred_trajectories[frame_i, agent_i,1], 
                          markerfacecolor='none', markeredgecolor='b', marker="s", markersize=7)
+                ax.plot(true_trajectories[frame_i, agent_i,0], true_trajectories[frame_i, agent_i,1], 
+                         markerfacecolor='none', markeredgecolor='k', marker="s", markersize=7)
             
 
 
@@ -201,7 +214,7 @@ def plot_trajecotries(true_trajectories,pred_trajectories,pred_trajectories_Soci
     plt.close()
 
 
-def plot_bivariate_gaussian3(mean, cov, ax, max_nstd=3):
+def plot_bivariate_gaussian3(mean, cov, ax, max_nstd=3, c='b'):
 
     def eigsorted(cov):
         vals, vecs = np.linalg.eigh(cov)
@@ -215,7 +228,7 @@ def plot_bivariate_gaussian3(mean, cov, ax, max_nstd=3):
 
         # Width and height are "full" widths, not radius
         width, height = 2 * j * np.sqrt(vals)
-        ellip = Ellipse(xy=mean, width=width, height=height, angle=theta, edgecolor='b', fill=False)
+        ellip = Ellipse(xy=mean, width=width, height=height, angle=theta, edgecolor=c, fill=False)
 
         ax.add_artist(ellip)
  
