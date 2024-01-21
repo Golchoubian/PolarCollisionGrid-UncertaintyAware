@@ -90,6 +90,7 @@ def Gaussian2DLikelihood(outputs, targets, nodesPresent, look_up, test=False):
 
     # Final PDF calculation
     result = result / denom
+    # result = torch.tanh(result) # to ensure that the probability density function passed to log is between 0 and 1., so NLL is always positive
 
     # Numerical stability
     epsilon = 1e-20
@@ -198,7 +199,7 @@ def revert_postion_change_seq2(x_seq, PedsList_seq, lookup_seq, first_values_dic
                 first_presence_flag[lookup_seq[ped]] = 1
             else:
                 absolute_x_seq[ind, lookup_seq[ped], 0:2] = frame[lookup_seq[ped], 0:2] + latest_pos[lookup_seq[ped]]
-                if (infer==True and ind>obs_length) or KF==True: # we have to rely on the algorithm's own prediction for the next state
+                if (infer==True and ind>=obs_length) or KF==True: # we have to rely on the algorithm's own prediction for the next state ! thid should be ind>= obs_length
                     latest_pos[lookup_seq[ped]] = absolute_x_seq[ind, lookup_seq[ped], 0:2]
                 else: # we use the ground truth that we have
                     latest_pos[lookup_seq[ped]] = orig_x_seq[ind, lookup_seq[ped], 0:2]
@@ -797,16 +798,18 @@ def uncertainty_aware_loss_Point2Dist(outputs, targets, mask, use_cuda):
     mahalanobis_dist = mahalanobis_distance(targets, outputs[:,:,:2], predicted_covs) # this should be tensor of same size as mask
 
     
-    # Calculate the probability density function (PDF) for the given Mahalanobis distance (a chi2-squared distribution)
-    # we want to minimize the mahalanobis distance, so we want to maximize the pdf_value
-    # Create a Chi2 distribution with the specified degrees of freedom
-    chi2_distribution = torch.distributions.Chi2(degrees_of_freedom)
-    # Calculate the PDF for each element of the tensor
-    pdf_values = chi2_distribution.log_prob(mahalanobis_dist).exp()
+    # # Calculate the probability density function (PDF) for the given Mahalanobis distance (a chi2-squared distribution)
+    # # we want to minimize the mahalanobis distance, so we want to maximize the pdf_value
+    # # Create a Chi2 distribution with the specified degrees of freedom
+    # chi2_distribution = torch.distributions.Chi2(degrees_of_freedom)
+    # # Calculate the PDF for each element of the tensor
+    # pdf_values = chi2_distribution.log_prob(mahalanobis_dist).exp()
     
-    # Numerical stability
-    epsilon = 1e-20
-    result = -torch.log(torch.clamp(pdf_values, min=epsilon))
+    # # Numerical stability
+    # epsilon = 1e-20
+    # result = -torch.log(torch.clamp(pdf_values, min=epsilon))
+
+    result = mahalanobis_dist # testing minimizing the mahalanobis distance itself instead of its -log(probability)
 
 
     result = result * mask # this will make those elements that do not existm don't count (those peds that have no data)
@@ -846,6 +849,12 @@ def uncertainty_aware_loss_Dist2Dist(outputs, targets_mean, targets_cov, mask, u
         predicted_covs[present_frames, ped_indx, :] = cov_matrix[present_frames, ped_indx,:] # for those peds that have no data, this keeps the default value of 0.01 !!!!!
 
     Bh_dist = bhattacharyya_distance(targets_mean, targets_cov, outputs[:,:,:2], predicted_covs) # this should be tensor of same size as mask
+    # Bh_coef = torch.exp(-Bh_dist/4) # the value is between 0 and 1 (the maximum value is 1 when Bh_dist is 0)
+
+    # # Numerical stability
+    # epsilon = 1e-20
+    # result = -torch.log(torch.clamp(Bh_coef, min=epsilon)) # this is the negative log of the Bhattacharyya coefficient
+    # # Bh_dist = -torch.log(torch.clamp((1-Bh_dist), min=epsilon)) # considering that Bh_dist remains between 0 and 1 as I see in my simulation
 
     result = Bh_dist * mask # this will make those elements that do not exist, don't count (those peds that have no data)
     # sum all the numbers in the tensor
@@ -870,11 +879,12 @@ def combination_loss_Point2Dist(outputs, targets, nodesPresent, look_up, mask, u
 
 def combination_loss_Dist2Dist(outputs, targets_mean, targets_cov, nodesPresent, look_up, mask, use_cuda):
    
+    w = 10
     NLL_loss = Gaussian2DLikelihood(outputs, targets_mean, nodesPresent, look_up)
     uncertainty_loss = uncertainty_aware_loss_Dist2Dist(outputs, targets_mean, targets_cov, mask, use_cuda)
-    loss = NLL_loss + uncertainty_loss # might need a weight for each loss in this case since they might not be in the same scale
-
-    return loss, NLL_loss, uncertainty_loss
+    loss = NLL_loss + w * uncertainty_loss # might need a weight for each loss in this case since they might not be in the same scale
+   
+    return loss, NLL_loss, w*uncertainty_loss
 
 
 
