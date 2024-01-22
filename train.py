@@ -316,6 +316,8 @@ def train(args):
                         
                 x_seq, first_values_dict = position_change_seq(x_seq, PedsList_seq, lookup_seq)
                 x_seq_veh, first_values_dict_veh = position_change_seq(x_seq_veh, VehsList_seq, lookup_seq_veh)
+                velocity_change, _ = position_change_seq(x_seq[:,:,2:4], PedsList_seq, lookup_seq) # this is essentail for the kalman filter calculation for covaraince to match a constant acceleration model
+                x_seq[:,:,2:4] = velocity_change
 
                 # create the covaraince matrix using kalman filter and add it to x_seq
                 GT_filtered_disp, GT_covariance = KF_covariance_generator(x_seq, mask, dataloader.timestamp,
@@ -433,7 +435,7 @@ def train(args):
                     ret_x_seq[args.obs_length-1,:,2:] = x_seq[args.obs_length-1,:,2:] # these are the mean of the gaussian distribution
 
                     last_observed_frame_prediction = ret_x_seq[args.obs_length-1, :, :2].clone()
-                    ret_x_seq[args.obs_length-1, :, :2] = x_seq[-1,:,:2] # storing the last GT observed frame here to ensure this is used in the next for loop and then 
+                    ret_x_seq[args.obs_length-1, :, :2] = x_seq[args.obs_length-1,:,:2] # storing the last GT observed frame here to ensure this is used in the next for loop and then 
                     # storing the actual prediction in it after the forward network is run for the first step in the prediction length 
                   
                     # rely on the output itself from now on
