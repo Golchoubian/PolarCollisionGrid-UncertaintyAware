@@ -185,7 +185,7 @@ def revert_seq(x_seq, PedsList_seq, lookup_seq, first_values_dict):
 
 
 
-def revert_postion_change_seq2(x_seq, PedsList_seq, lookup_seq, first_values_dict, orig_x_seq, obs_length, infer=False, KF=True):
+def revert_postion_change_seq2(x_seq, PedsList_seq, lookup_seq, first_values_dict, orig_x_seq, obs_length, infer=False, KF=False):
     # convert displacement array to absolute position array
     absolute_x_seq = x_seq.clone()
     first_presence_flag = [0]*(x_seq.shape[1])
