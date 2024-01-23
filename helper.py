@@ -526,7 +526,7 @@ def get_velocity_errors(ret_nodes, nodes, assumedNodesPresent, ObsNodesPresent, 
             error_speed[tstep] = error_speed[tstep] / counter
             error_heading[tstep] = error_heading[tstep] / counter
 
-    return torch.mean(error_speed), sum(error_heading)/len(error_heading)
+    return torch.mean(error_speed)**0.5, (sum(error_heading)/len(error_heading))**0.5
 
 def get_mean_NLL(dist_param, orig_x, PedsList, PedsList_obs, using_cuda, lookup):
     '''

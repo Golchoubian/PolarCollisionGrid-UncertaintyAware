@@ -12,6 +12,9 @@ from Interaction import getInteractionGridMask, getSequenceInteractionGridMask
 from helper import * # want to use its get_model()
 from helper import sample_gaussian_2d
 from matplotlib import pyplot as plt
+import pandas as pd
+import logging
+import sys
 
 def main():
 
@@ -81,6 +84,14 @@ def main():
 
     plot_directory = os.path.join(prefix, 'plot/')
     plot_test_file_directory = 'test'
+    test_directory = os.path.join(plot_directory, plot_test_file_directory)
+
+    log_file = os.path.join(test_directory, 'test_results.log')
+    file_handler = logging.FileHandler(log_file, mode='w')
+    stdout_handler = logging.StreamHandler(sys.stdout)
+    level = logging.INFO
+    logging.basicConfig(level=level, handlers=[stdout_handler, file_handler],
+                        format='%(asctime)s, %(levelname)s: %(message)s', datefmt="%Y-%m-%d %H:%M:%S")
 
     iteration_result = []
     iteration_total_error = []
@@ -382,39 +393,63 @@ def main():
                                  sample_args.obs_length, sample_dist_param_seq[min_index], orig_x_seq_veh.data.cpu().numpy(), 
                                  VehsList_seq, lookup_seq_veh, grid_seq, None))
 
+        ADE = (total_error.data.cpu()/ dataloader.num_batches).item()
+        FDE = (final_error.data.cpu()/ dataloader.num_batches).item()
+        MHD = (MHD_error.data.cpu()/ (dataloader.num_batches-None_count)).item()
+        SE = (speed_error.data.cpu()/ dataloader.num_batches).item()
+        HE = (heading_error.data.cpu()/ dataloader.num_batches).item()
+        Collision = ((num_collision_homo+num_collision_hetero)/(all_num_cases_homo+all_num_cases_hetero))*100
+        Collision_pedped = (num_collision_homo/all_num_cases_homo)*100
+        Collision_pedveh = (num_collision_hetero/all_num_cases_hetero)*100
+        sigma1 = (ESV_sigma1/data_point_num)-0.68
+        sigma2 = (ESV_sigma2/data_point_num)-0.95
+        sigma3 = (ESV_sigma3/data_point_num)-0.997
+
         iteration_result.append(results)
-        iteration_total_error.append(total_error.data.cpu()/ dataloader.num_batches)
-        iteration_final_error.append(final_error.data.cpu()/ dataloader.num_batches)
-        iteration_MHD_error.append(MHD_error.data.cpu()/ (dataloader.num_batches-None_count))
-        iteration_speed_error.append(speed_error.data.cpu()/ dataloader.num_batches)
-        iteration_heading_error.append(heading_error.data.cpu()/ dataloader.num_batches)
-        iteration_collision_percent.append((num_collision_homo+num_collision_hetero)/(all_num_cases_homo+all_num_cases_hetero))
-        iteration_collision_percent_pedped.append(num_collision_homo/all_num_cases_homo)
-        iteration_collision_percent_pedveh.append(num_collision_hetero/all_num_cases_hetero)
+        iteration_total_error.append(ADE)
+        iteration_final_error.append(FDE)
+        iteration_MHD_error.append(MHD)
+        iteration_speed_error.append(SE)
+        iteration_heading_error.append(HE)
+        iteration_collision_percent.append(Collision)
+        iteration_collision_percent_pedped.append(Collision_pedped)
+        iteration_collision_percent_pedveh.append(Collision_pedveh)
         iteration_NLL_list.append(NLL_list)
-        iteration_ESV_sigma1.append((ESV_sigma1/data_point_num)-0.68)
-        iteration_ESV_sigma2.append((ESV_sigma2/data_point_num)-0.95)
-        iteration_ESV_sigma3.append((ESV_sigma3/data_point_num)-0.997)
+        iteration_ESV_sigma1.append(sigma1)
+        iteration_ESV_sigma2.append(sigma2)
+        iteration_ESV_sigma3.append(sigma3)
         
-        print('Iteration:' ,iteration+1,' Total testing (prediction sequence) mean error of the model is ', total_error / dataloader.num_batches) 
-        print('Iteration:' ,iteration+1,'Total testing final error of the model is ', final_error / dataloader.num_batches)
-        print('Iteration:' ,iteration+1,'Total tresting (prediction sequence) hausdorff distance error of the model is ', 
-                                                                                    MHD_error / (dataloader.num_batches-None_count))
-        print('Iteration:' ,iteration+1,'Total tresting (prediction sequence) speed error of the model is ', speed_error / dataloader.num_batches)
-        print('Iteration:' ,iteration+1,'Total tresting final heading error of the model is ', heading_error / dataloader.num_batches)
-        print('Iteration:' ,iteration+1,'Overll percentage of collision of the model is ', iteration_collision_percent[-1])
-        print('Iteration:' ,iteration+1,'Percentage of collision between pedestrians of the model is ', iteration_collision_percent_pedped[-1])
+        print('Iteration:' ,iteration+1,' Total testing (prediction sequence) mean error of the model is ', ADE) 
+        print('Iteration:' ,iteration+1,'Total testing final error of the model is ', FDE)
+        print('Iteration:' ,iteration+1,'Total tresting (prediction sequence) hausdorff distance error of the model is ',
+                                                                                     MHD)
+        print('Iteration:' ,iteration+1,'Total tresting (prediction sequence) speed error of the model is ', SE)
+        print('Iteration:' ,iteration+1,'Total tresting final heading error of the model is ', HE)
+        print('Iteration:' ,iteration+1,'Overll percentage of collision of the model is ', Collision)
+        print('Iteration:' ,iteration+1,'Percentage of collision between pedestrians of the model is ', Collision_pedped)
         print('Iteration:' ,iteration+1,'Percentage of collision between pedestrians and vehicles of the model is ',
-                                                                                     iteration_collision_percent_pedveh[-1])
+                                                                                     Collision_pedveh)
         # calculate the mean and std for the NLL_list
         # check the lenght of the list. It should be 1081!
         NLL_mean, NLL_std = calculate_mean_and_std(NLL_list)
         print('Iteration:' ,iteration+1,'NLL of the model is ', NLL_mean, 'with std of ', NLL_std)
-        print('Iteration:' ,iteration+1,'ESV_sigma1 of the model is ', (ESV_sigma1 / data_point_num)-0.68)
-        print('Iteration:' ,iteration+1,'ESV_sigma2 of the model is ', (ESV_sigma2 / data_point_num)-0.95)
-        print('Iteration:' ,iteration+1,'ESV_sigma3 of the model is ', (ESV_sigma3  /data_point_num)-0.977)
+        print('Iteration:' ,iteration+1,'ESV_sigma1 of the model is ', sigma1)
+        print('Iteration:' ,iteration+1,'ESV_sigma2 of the model is ', sigma2)
+        print('Iteration:' ,iteration+1,'ESV_sigma3 of the model is ', sigma3)
 
         # print('None count for MHD calculation:', None_count)
+
+        # saving the informatino of all episodes on the eval dataset in a csv file
+        df = pd.DataFrame({'model_num': [iteration], 'ADE': [ADE], 'FDE': [FDE], 'MHD': [MHD],
+                            'speed_error': [SE], 'heading_error': [HE], 'collision_rate': [Collision],
+                            'collision_rate_pedped': [Collision_pedped],
+                            'collision_rate_pedveh': [Collision_pedveh],
+                            'NLL_mean': [NLL_mean], 'NLL_std': [NLL_std],
+                            'ESV_sigma1': [sigma1], 'ESV_sigma2': [sigma2], 'ESV_sigma3': [sigma3]})
+        if os.path.exists(os.path.join(test_directory, 'eval.csv')):
+            df.to_csv(os.path.join(test_directory, 'eval.csv'), mode='a', header=False, index=False)
+        else:
+            df.to_csv(os.path.join(test_directory, 'eval.csv'), mode='w', header=True, index=False)
 
         
         if total_error<smallest_err:
@@ -433,30 +468,52 @@ def main():
         #     print('New best iteration : ', iteration+1, 'Error: ',NLL_mean)
         #     smallest_err_iter_num = iteration
         #     smallest_err = NLL_mean
-
-    dataloader.write_to_plot_file(iteration_result[smallest_err_iter_num], os.path.join(plot_directory, plot_test_file_directory)) 
+    best_model_list_index = smallest_err_iter_num-start_iteration
+    dataloader.write_to_plot_file(iteration_result[best_model_list_index], 
+                                  os.path.join(plot_directory, plot_test_file_directory)) 
 
     print("==================================================")
     print("==================================================")
     print("==================================================")
     print('Best final iteration : ', smallest_err_iter_num+1)
-    print('ADE: ', iteration_total_error[smallest_err_iter_num].item())
-    print('FDE: ', iteration_final_error[smallest_err_iter_num].item())
-    print('MHD: ', iteration_MHD_error[smallest_err_iter_num].item())
-    print('Speed error: ',iteration_speed_error[smallest_err_iter_num].item()**0.5)
-    print('Heading error: ', iteration_heading_error[smallest_err_iter_num].item()**0.5)
-    print('Collision percentage: ', round(iteration_collision_percent[smallest_err_iter_num], 4) * 100)
-    print('Collision percentage (ped-ped): ', round(iteration_collision_percent_pedped[smallest_err_iter_num], 4) * 100)
-    print('Collision percentage (ped-veh): ', round(iteration_collision_percent_pedveh[smallest_err_iter_num], 4) * 100)
+    print('ADE: ', iteration_total_error[best_model_list_index])
+    print('FDE: ', iteration_final_error[best_model_list_index])
+    print('MHD: ', iteration_MHD_error[best_model_list_index])
+    print('Speed error: ',iteration_speed_error[best_model_list_index])
+    print('Heading error: ', iteration_heading_error[best_model_list_index])
+    print('Collision percentage: ', round(iteration_collision_percent[best_model_list_index], 4))
+    print('Collision percentage (ped-ped): ', round(iteration_collision_percent_pedped[best_model_list_index], 4))
+    print('Collision percentage (ped-veh): ', round(iteration_collision_percent_pedveh[best_model_list_index], 4))
 
-    best_iter_NLL_list = iteration_NLL_list[smallest_err_iter_num]
+    best_iter_NLL_list = iteration_NLL_list[best_model_list_index]
     # calculate the mean and std for this list 
     NLL_mean, NLL_std = calculate_mean_and_std(best_iter_NLL_list)
     print('NLL: ', NLL_mean, 'with std of ', NLL_std)
-    print('ESV_sigma1: ', iteration_ESV_sigma1[smallest_err_iter_num])
-    print('ESV_sigma2: ', iteration_ESV_sigma2[smallest_err_iter_num])
-    print('ESV_sigma3: ', iteration_ESV_sigma3[smallest_err_iter_num])
+    print('ESV_sigma1: ', iteration_ESV_sigma1[best_model_list_index])
+    print('ESV_sigma2: ', iteration_ESV_sigma2[best_model_list_index])
+    print('ESV_sigma3: ', iteration_ESV_sigma3[best_model_list_index])
 
+    # logging
+    logging.info(
+        'ADE: {:.3f}, FDE: {:.3f}, MHD: {:.3f}, Speed_error: {:.3f}, '
+        'Heading_error: {:.3f}'.
+        format(iteration_total_error[best_model_list_index], 
+               iteration_final_error[best_model_list_index], 
+               iteration_MHD_error[best_model_list_index],
+               iteration_speed_error[best_model_list_index],
+               iteration_heading_error[best_model_list_index]))
+    logging.info(
+        'Collision: {:.3f}%, Collision_pedped: {:.3f}%, '
+        'Collision_pedveh: {:.3f}%'.
+        format(iteration_collision_percent[best_model_list_index],
+               iteration_collision_percent_pedped[best_model_list_index],
+               iteration_collision_percent_pedveh[best_model_list_index]))
+    logging.info(
+        'NLL: {:.3f}+- {:.3f}, '
+        'ESV_sigma1: {:.3f}, ESV_sigma2: {:.3f}, ESV_sigma2: {:.3f},'.
+        format(NLL_mean, NLL_std, iteration_ESV_sigma1[best_model_list_index],
+               iteration_ESV_sigma2[best_model_list_index],
+               iteration_ESV_sigma3[best_model_list_index]))
     
     # plt.subplot(2,1,1)
     # plt.plot(range(start_iteration,sample_args.iteration), iteration_total_error, 'b', linewidth=2.0, label="ADE")
