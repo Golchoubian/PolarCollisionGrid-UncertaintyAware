@@ -870,9 +870,10 @@ def uncertainty_aware_loss_Dist2Dist(outputs, targets_mean, targets_cov, mask, u
 
 def combination_loss_Point2Dist(outputs, targets, nodesPresent, look_up, mask, use_cuda ):
 
+    w = 10
     NLL_loss = Gaussian2DLikelihood(outputs, targets, nodesPresent, look_up)
     uncertainty_loss = uncertainty_aware_loss_Point2Dist(outputs, targets, mask, use_cuda)
-    loss = NLL_loss + uncertainty_loss
+    loss = NLL_loss + w * uncertainty_loss
 
     return loss, NLL_loss, uncertainty_loss
 
