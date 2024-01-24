@@ -401,9 +401,9 @@ def main():
         Collision = ((num_collision_homo+num_collision_hetero)/(all_num_cases_homo+all_num_cases_hetero))*100
         Collision_pedped = (num_collision_homo/all_num_cases_homo)*100
         Collision_pedveh = (num_collision_hetero/all_num_cases_hetero)*100
-        sigma1 = (ESV_sigma1/data_point_num)-0.68
-        sigma2 = (ESV_sigma2/data_point_num)-0.95
-        sigma3 = (ESV_sigma3/data_point_num)-0.997
+        sigma1 = (ESV_sigma1/data_point_num)-0.39
+        sigma2 = (ESV_sigma2/data_point_num)-0.86
+        sigma3 = (ESV_sigma3/data_point_num)-0.99
 
         iteration_result.append(results)
         iteration_total_error.append(ADE)
