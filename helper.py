@@ -561,9 +561,9 @@ def within_sigma_levels(point, mean, covariance):
 
     # Determine the critical values for 1-sigma, 2-sigma, and 3-sigma levels
     dim = len(mean)
-    critical_value_1sigma = np.sqrt(chi2.ppf(0.68, dim))
-    critical_value_2sigma = np.sqrt(chi2.ppf(0.95, dim))
-    critical_value_3sigma = np.sqrt(chi2.ppf(0.997, dim))
+    critical_value_1sigma = np.sqrt(chi2.ppf(0.39, dim))
+    critical_value_2sigma = np.sqrt(chi2.ppf(0.86, dim))
+    critical_value_3sigma = np.sqrt(chi2.ppf(0.99, dim))
 
     # chi2_distribution =  torch.distributions.Chi2(df=dim)
     # critical_value_1sigma = torch.sqrt(chi2_distribution.icdf(torch.tensor(0.68)))
