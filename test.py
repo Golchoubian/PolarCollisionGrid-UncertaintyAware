@@ -510,7 +510,7 @@ def main():
                iteration_collision_percent_pedveh[best_model_list_index]))
     logging.info(
         'NLL: {:.3f}+- {:.3f}, '
-        'ESV_sigma1: {:.3f}, ESV_sigma2: {:.3f}, ESV_sigma2: {:.3f},'.
+        'ESV_sigma1: {:.3f}, ESV_sigma2: {:.3f}, ESV_sigma3: {:.3f},'.
         format(NLL_mean, NLL_std, iteration_ESV_sigma1[best_model_list_index],
                iteration_ESV_sigma2[best_model_list_index],
                iteration_ESV_sigma3[best_model_list_index]))
