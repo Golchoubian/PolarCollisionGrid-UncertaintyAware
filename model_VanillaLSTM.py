@@ -24,7 +24,10 @@ class VLSTMModel(nn.Module):
             self.seq_length = 2 
         else:
             # Training time
-            self.seq_length = args.seq_length
+            if args.teacher_forcing:
+                self.seq_length = args.seq_length
+            else:
+                self.seq_length = 2
 
         # Store required sizes
         self.rnn_size = args.rnn_size
@@ -109,7 +112,9 @@ class VLSTMModel(nn.Module):
 
             # Select the corresponding input positions
             nodes_current = frame[list_of_nodes,:2] # Getting only the x and y of each pedestrian for the input. Leaving th vx and vy
-        
+            if self.input_size == 6:
+                # adding pedestrians covariates to the input
+                nodes_current = torch.cat((nodes_current, frame[list_of_nodes,9:13]), 1) 
 
             # Get the corresponding hidden and cell states
             hidden_states_current = torch.index_select(hidden_states, 0, corr_index)
