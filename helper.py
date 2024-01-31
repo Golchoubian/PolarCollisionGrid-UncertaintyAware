@@ -875,7 +875,7 @@ def combination_loss_Point2Dist(outputs, targets, nodesPresent, look_up, mask, u
     uncertainty_loss = uncertainty_aware_loss_Point2Dist(outputs, targets, mask, use_cuda)
     loss = NLL_loss + w * uncertainty_loss
 
-    return loss, NLL_loss, uncertainty_loss
+    return loss, NLL_loss, w * uncertainty_loss
 
 
 def combination_loss_Dist2Dist(outputs, targets_mean, targets_cov, nodesPresent, look_up, mask, use_cuda):
