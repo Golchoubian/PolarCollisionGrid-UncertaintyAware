@@ -65,7 +65,8 @@ def main():
     if sample_args.method == 1:
         save_directory = os.path.join(save_directory_pre, 'SocialLSTM/') 
     elif sample_args.method == 3:
-        save_directory = os.path.join(save_directory_pre, 'VanillaLSTM/')
+        # save_directory = os.path.join(save_directory_pre, 'VanillaLSTM/')
+        save_directory = save_directory_pre
     elif sample_args.method == 4:
         # save_directory = os.path.join(save_directory_pre, 'CollisionGrid/')
         save_directory = save_directory_pre
@@ -571,7 +572,7 @@ def sample(x_seq, Pedlist, args, net, true_x_seq, true_Pedlist, saved_args, data
         for tstep in range(args.obs_length-1):
             if grid is None: 
                # Do a forward prop
-                out_obs, hidden_states, cell_states = net(x_seq[tstep,:,:2].view(1, numx_seq, 2), hidden_states, cell_states, 
+                out_obs, hidden_states, cell_states = net(x_seq[tstep,:,:].view(1, numx_seq, x_seq.shape[2]), hidden_states, cell_states, 
                                                           [Pedlist[tstep]], [num_pedlist[tstep]], dataloader, look_up)
             elif (args.method == 4):
                 # Do a forward prop 
