@@ -116,7 +116,10 @@ def Gaussian2DLikelihood(outputs, targets, nodesPresent, look_up, test=False):
                 results.append(result[framenum, nodeID].item())
     
     if test:
-        return results, loss/counter
+        if counter != 0:
+            return results, loss/counter
+        else:
+            return results, torch.tensor(loss)
 
     if counter != 0:
         return loss / counter
@@ -432,7 +435,7 @@ def get_hausdorff_distance(ret_nodes, nodes, assumedNodesPresent, ObsNodesPresen
     num_agents = len(Valid_PedsPresent)
 
     if (num_agents == 0):
-        return None
+        return torch.tensor(0.0)
     else:
         error = torch.zeros(num_agents)
     
