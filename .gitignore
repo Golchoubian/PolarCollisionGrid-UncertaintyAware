@@ -163,9 +163,10 @@ cython_debug/
 /Store_Results/model/config.pkl
 /Store_Results/log
 # /Store_Results/plot
+/Store_Results/plot/train
 /Store_Results/plot/test/plt
 
 
-# /Store_Results/model/
+/Store_Results/model/
 # /Store_Results/
 /Store_Results/Correct final ones
