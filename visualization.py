@@ -7,6 +7,7 @@ import string
 from matplotlib.patches import Ellipse
 from helper import cov_mat_generation, getCoef
 import torch
+from mpl_toolkits.axes_grid1.inset_locator import inset_axes, mark_inset
 
 def get_cmap(n, name='hsv'):
     '''Returns a function that maps each index in 0, 1, ..., n-1 to a distinct 
@@ -40,6 +41,43 @@ def plot_trajecotries(true_trajectories,pred_trajectories,pred_trajectories_Soci
     min_y = pred_trajectories[:,:,1].min() - 10
     max_y = pred_trajectories[:,:,1].max() + 10
 
+    # # scenario 500
+    # min_x = 55
+    # max_x = 78
+    # min_y = 35
+    # max_y = 55
+
+    # # scenario 621
+    # min_x = 48
+    # max_x = 78
+    # min_y = 25
+    # max_y = 55
+
+    # # scenario 621 (zoomed on the stationary ped)
+    # min_x = 57
+    # max_x = 63
+    # min_y = 43
+    # max_y = 48
+    
+    # # scenario 730
+    # min_x = 42
+    # max_x = 62
+    # min_y = 25
+    # max_y = 45
+
+    # scenario 874
+    min_x = 43
+    max_x = 66
+    min_y = 27 # 26
+    max_y = 50 # 49
+
+    # # scenario 871
+    # min_x = 42.5
+    # max_x = 67.5
+    # min_y = 26 # 26
+    # max_y = 53 # 49
+
+
     ax.set_xlim(min_x, max_x)
     ax.set_ylim(min_y, max_y)
 
@@ -48,7 +86,7 @@ def plot_trajecotries(true_trajectories,pred_trajectories,pred_trajectories_Soci
     cov_matrix = cov_mat_generation(scaled_param_dist)
     # print('cov_matrix.shape: ', cov_matrix.shape)
 
-
+    zoomed_ped_id = 3
     for agent_index in range(num_ped): # for each agent plotting its trajecotry for the frames the agent is present
 
         # finding the id of the agent usign the lookup dictionary, 
@@ -70,6 +108,19 @@ def plot_trajecotries(true_trajectories,pred_trajectories,pred_trajectories_Soci
             if agent_id in PedsList_seq[frame]:
                 pred_frame_nums.append(frame)
 
+        ### Ground truth:
+        # alpha_val = 1.0 # transparancy value
+        # all_frame = obs_frame_nums + pred_frame_nums
+        # ax.plot(true_trajectories[all_frame,agent_index,0], true_trajectories[all_frame,agent_index,1],
+        #           c='0.0', linewidth=2.0, alpha=alpha_val)
+                
+        alpha_val = 1.0 # transparancy value
+        # observed traj
+        ax.plot(true_trajectories[obs_frame_nums,agent_index,0], true_trajectories[obs_frame_nums,agent_index,1],
+                  c='g', linewidth=2.0, alpha=alpha_val, ls='--')
+        # ground truth predcition
+        ax.plot(true_trajectories[pred_frame_nums,agent_index,0], true_trajectories[pred_frame_nums,agent_index,1],
+                  c='0.0', linewidth=2.0, alpha=alpha_val, ls='-')
             
         ### Predictions
 
@@ -85,46 +136,61 @@ def plot_trajecotries(true_trajectories,pred_trajectories,pred_trajectories_Soci
             cov = cov_matrix[f,agent_index]
             plot_bivariate_gaussian3(mean, cov, ax, 1)
         ax.plot(pred_trajectories[pred_frame_nums,agent_index,0], pred_trajectories[pred_frame_nums,agent_index,1],
-                  c='b', ls="-", linewidth=1.0)
+                  c='r', linestyle = (0,(1,0.7)), linewidth=2)
         # ax.plot(dist_param_seq[pred_frame_nums,agent_index,0], dist_param_seq[pred_frame_nums,agent_index,1],
         #           c='b', ls="-", linewidth=1.0)
-        
 
-        # # prediction of SocialLSTM
-        # for f in pred_frame_nums:
-        #     marker_size = min_size + ((max_size-min_size)/seq_len * f)
-        #     plt.plot(pred_trajectories_SocialLSTM[f,agent_index,0], pred_trajectories_SocialLSTM[f,agent_index,1],
-        #               c='r', ls=":", marker='^', markersize=marker_size)
-        # plt.plot(pred_trajectories_SocialLSTM[pred_frame_nums,agent_index,0], pred_trajectories_SocialLSTM[pred_frame_nums,agent_index,1],
-        #           c='r', ls="-", linewidth=1.0)
 
-        # # prediction of Vanilla LSTM
-        # for f in pred_frame_nums:
-        #     marker_size = min_size + ((max_size-min_size)/seq_len * f)
-        #     plt.plot(pred_trajectories_VLSTM[f,agent_index,0], pred_trajectories_VLSTM[f,agent_index,1],
-        #               c='g', ls=":", marker='p', markersize=marker_size)
-        # plt.plot(pred_trajectories_VLSTM[pred_frame_nums,agent_index,0], pred_trajectories_VLSTM[pred_frame_nums,agent_index,1], 
-        #             c='g', ls="-", linewidth=1.0) 
+        if agent_index == zoomed_ped_id: 
+            # ============ zoomed in plot ============
+            # Define the inset axis position
+            left, bottom, width, height = 1.0, 1.0, 0.5, 0.5
+            ax_inset = inset_axes(ax, width='35%', height='35%', loc='upper left') #,
+                                #   bbox_to_anchor=(left, bottom, width, height))
+            # Plot the zoomed-in data
+            for f in pred_frame_nums:
+                marker_size = min_size + ((max_size-min_size)/seq_len * f)
+                mean = dist_param_seq[f,agent_index,:2]
+                cov = cov_matrix[f,agent_index]
+                plot_bivariate_gaussian3(mean, cov, ax_inset, 1)
+            ax_inset.plot(pred_trajectories[pred_frame_nums,agent_index,0], 
+                        pred_trajectories[pred_frame_nums,agent_index,1],
+                        c='r', linestyle = (0,(1,0.7)), linewidth=2.5,
+                        label='Zoomed In')
 
-        # # prediction of LR
-        # for f in pred_frame_nums[1:]:
-        #     marker_size = min_size + ((max_size-min_size)/seq_len * f)
-        #     plt.plot(pred_trajectories_LR[f,agent_index,0], pred_trajectories_LR[f,agent_index,1],
-        #               c='y', ls=":", marker='P', markersize=marker_size)
-        # plt.plot(pred_trajectories_LR[pred_frame_nums,agent_index,0], pred_trajectories_LR[pred_frame_nums,agent_index,1],
-        #           c='y', ls="-", linewidth=1.0) 
-        
-        
-        ### Ground truth:
-        alpha_val = 1.0 # transparancy value
-        all_frame = obs_frame_nums + pred_frame_nums
-        ax.plot(true_trajectories[all_frame,agent_index,0], true_trajectories[all_frame,agent_index,1],
-                  c='0.0', linewidth=2.0, alpha=alpha_val)
-        # plot the Ground truth covariance
-        for f in pred_frame_nums:
-            GT_mean = true_trajectories[f,agent_index,:2]
-            GT_cov = true_trajectories[f,agent_index,9:13].reshape(2,2)
-            plot_bivariate_gaussian3(GT_mean, GT_cov, ax, 1, 'k')
+            # observed traj
+            ax_inset.plot(true_trajectories[obs_frame_nums,agent_index,0],
+                           true_trajectories[obs_frame_nums,agent_index,1],
+                            c='g', linewidth=2.0, alpha=alpha_val, ls='--')
+            # ground truth predcition
+            ax_inset.plot(true_trajectories[pred_frame_nums,agent_index,0], 
+                           true_trajectories[pred_frame_nums,agent_index,1],
+                            c='0.0', linewidth=2.0, alpha=alpha_val, ls='-')
+            # current position
+            ax_inset.plot(true_trajectories[frame_i, agent_index,0],
+                           true_trajectories[frame_i, agent_index,1], 
+                            color='k', marker="*", markersize=6)
+            
+            # sceanrio 874
+            ax_inset.set_xlim(50.5, 51.8)  # Set x-axis range
+            ax_inset.set_ylim(37.7, 39)  # Set y-axis range
+            # ax_inset.set_xlim(50, 51.7)  # Set x-axis range
+            # ax_inset.set_ylim(37.5, 40.5)  # Set y-axis range
+            
+            # # sceanrio 871
+            # ax_inset.set_xlim(50.5, 51.5)  # Set x-axis range
+            # ax_inset.set_ylim(38, 39)  # Set y-axis range
+            # # # sceanrio 871 whole cov
+            # # ax_inset.set_xlim(50, 52.5)  # Set x-axis range
+            # # ax_inset.set_ylim(36, 40.5)  # Set y-axis range
+
+            # Remove the axes labels in the zoomed-in plot
+            ax_inset.set_xticks([])
+            ax_inset.set_yticks([])
+            ax_inset.set_xlabel('')
+            ax_inset.set_ylabel('')
+            # Mark the area of the inset in the main plot
+            mark_inset(ax, ax_inset, loc1=3, loc2=1, fc="none", ec="0.5")
 
       
     max_size_veh = 6
@@ -142,9 +208,9 @@ def plot_trajecotries(true_trajectories,pred_trajectories,pred_trajectories_Soci
                 pres_frame_nums.append(frame)
                 marker_size = min_size_veh + ((max_size_veh-min_size_veh)/seq_len * frame)
                 ax.plot(true_trajectories_veh[frame,veh_ind,0], true_trajectories_veh[frame,veh_ind,1], 
-                         c='0.3', marker='o', markersize=marker_size)
+                         c='0.5', marker='o', markersize=marker_size)
         ax.plot(true_trajectories_veh[pres_frame_nums,veh_ind,0], true_trajectories_veh[pres_frame_nums,veh_ind,1], 
-                 c='0.3', linewidth=2.0)
+                 c='0.5', linewidth=2.0)
 
     
     # =========================================================================================================================================
@@ -162,24 +228,37 @@ def plot_trajecotries(true_trajectories,pred_trajectories,pred_trajectories_Soci
         for indx, nodes_pre in enumerate(PedsList_seq[frame_i]):
             agent_i = lookup[nodes_pre]
             label = "Ped " + alphabet[indx]
-            if indx == ego_agent_indx_in_pedlist: # This is our ego agent for which we want to plot its neighbours
-                ego_agent = agent_i # index number of the ego agent in the trajectroy data tesnor of the sequence 
-                ax.plot(pred_trajectories[frame_i, agent_i,0], pred_trajectories[frame_i, agent_i,1], 
-                         color='b', marker="*", markersize=11)
-                ax.plot(true_trajectories[frame_i, agent_i,0], true_trajectories[frame_i, agent_i,1], 
-                            color='k', marker="*", markersize=11)
-
-            elif (any(grid_seq[frame_i][ego_agent_indx_in_pedlist,indx,:])): # This agent is in the grid of the ego agent.
-                ax.plot(pred_trajectories[frame_i, agent_i,0], pred_trajectories[frame_i, agent_i,1], 
-                         color='b', marker="s", markersize=7)
-                ax.plot(true_trajectories[frame_i, agent_i,0], true_trajectories[frame_i, agent_i,1], 
-                         color='k', marker="s", markersize=7)
-              
-            else: # This agent is presnet but not in the gird of the ego agent
-                ax.plot(pred_trajectories[frame_i, agent_i,0], pred_trajectories[frame_i, agent_i,1], 
-                         markerfacecolor='none', markeredgecolor='b', marker="s", markersize=7)
-                ax.plot(true_trajectories[frame_i, agent_i,0], true_trajectories[frame_i, agent_i,1], 
-                         markerfacecolor='none', markeredgecolor='k', marker="s", markersize=7)
+            if indx < 7:
+                if indx in [1]:
+                    ax.plot(true_trajectories[frame_i, agent_i,0], true_trajectories[frame_i, agent_i,1], 
+                            color='k', marker="*", markersize=9)
+                    ax.text(true_trajectories[frame_i, agent_i,0]+0.5, true_trajectories[frame_i, agent_i,1]+0.7,
+                        label, fontsize = label_font_size, color ="k") 
+                elif indx in [2]:
+                    ax.plot(true_trajectories[frame_i, agent_i,0], true_trajectories[frame_i, agent_i,1], 
+                                color='k', marker="*", markersize=9)
+                    ax.text(true_trajectories[frame_i, agent_i,0]+0.4, true_trajectories[frame_i, agent_i,1]+0.4,
+                            label, fontsize = label_font_size, color ="k") 
+                elif indx in [3]:
+                    ax.plot(true_trajectories[frame_i, agent_i,0], true_trajectories[frame_i, agent_i,1], 
+                            color='k', marker="*", markersize=9)
+                    ax.text(true_trajectories[frame_i, agent_i,0]-0.4, true_trajectories[frame_i, agent_i,1]+1,
+                        label, fontsize = label_font_size, color ="k") 
+                elif indx in [4]:
+                    ax.plot(true_trajectories[frame_i, agent_i,0], true_trajectories[frame_i, agent_i,1], 
+                            color='k', marker="*", markersize=9)
+                    ax.text(true_trajectories[frame_i, agent_i,0]+0.5, true_trajectories[frame_i, agent_i,1],
+                        label, fontsize = label_font_size, color ="k") 
+                elif indx in [5]:
+                    ax.plot(true_trajectories[frame_i, agent_i,0], true_trajectories[frame_i, agent_i,1], 
+                            color='k', marker="*", markersize=9)
+                    ax.text(true_trajectories[frame_i, agent_i,0]-1.4, true_trajectories[frame_i, agent_i,1]+0.5,
+                        label, fontsize = label_font_size, color ="k") 
+                else:
+                    ax.plot(true_trajectories[frame_i, agent_i,0], true_trajectories[frame_i, agent_i,1], 
+                                color='k', marker="*", markersize=9)
+                    ax.text(true_trajectories[frame_i, agent_i,0]-0.5, true_trajectories[frame_i, agent_i,1]+0.7,
+                            label, fontsize = label_font_size, color ="k") 
             
 
 
@@ -188,23 +267,25 @@ def plot_trajecotries(true_trajectories,pred_trajectories,pred_trajectories_Soci
             agent_i = lookup_seq_veh[nodes_pre]
             if (any(grid_seq_veh[frame_i][ego_agent_indx_in_pedlist,indx,:])): # This agent is in the grid of the ego agent.
                 plt.plot(true_trajectories_veh[frame_i, agent_i,0], true_trajectories_veh[frame_i, agent_i,1], 
-                         color='0.3', marker="s", markersize=7)
+                         color='0.3', marker="*", markersize=11)
+                ax.text(true_trajectories_veh[frame_i, agent_i,0]-0.5, true_trajectories_veh[frame_i, agent_i,1]-1.5,
+                         label_veh, fontsize = label_font_size, color ="k") 
            
             else: # This agent is presnet but not in the gird of the ego agent
                 ax.plot(true_trajectories_veh[frame_i, agent_i,0], true_trajectories_veh[frame_i, agent_i,1], 
-                         markerfacecolor='none', markeredgecolor='0.3', marker="s", markersize=7)
+                         color='0.3', marker="*", markersize=11)
+                ax.text(true_trajectories_veh[frame_i, agent_i,0]-0.5, true_trajectories_veh[frame_i, agent_i,1]-1.5,
+                         label_veh, fontsize = label_font_size, color ="k") 
                
 
     # legends
-    ax.plot(-100,-100, c='b', marker='d', label='Collision Grid')
-    # ax.plot(-100,-100, c='r', marker='^', label='Social LSTM')
-    # ax.plot(-100,-100, c='g', marker='p', label='Vanilla LSTM')
-    # ax.plot(-100,-100, c='y', marker='P', label='Linear Regression')
-    ax.plot(-100,-100, c='0.0', marker='_', label='Ground truth')
-    ax.legend(loc="lower right", prop={'size': 13}, ncol=1)
+    ax.plot(-100,-100, c='b', ls='-', label='$1\sigma$ std. pred')
+    ax.plot(-100,-100, c='r', ls=':', label='UAW-PCG mean pred.')
+    # ax.plot(-100,-100, c='r', ls=':', label='PCG mean pred.')
+    ax.plot(-100,-100, c='k', ls='-', label='Ground truth')
+    ax.plot(-100,-100, c='g', ls='--', label='Observed traj.')
 
-    # plt.show()
-    # plt.pause(100)
+    ax.legend(loc="lower right", prop={'size': 12}, ncol=2)
 
     
     if is_train:
@@ -228,7 +309,8 @@ def plot_bivariate_gaussian3(mean, cov, ax, max_nstd=3, c='b'):
 
         # Width and height are "full" widths, not radius
         width, height = 2 * j * np.sqrt(vals)
-        ellip = Ellipse(xy=mean, width=width, height=height, angle=theta, edgecolor=c, fill=False)
+        ellip = Ellipse(xy=mean, width=width, height=height, angle=theta, edgecolor=c, fill=False,
+                          linewidth=1.0)
 
         ax.add_artist(ellip)
  
@@ -294,7 +376,7 @@ def main():
 
     print("====== The total number of data in the test set is: " + str(len(results)) + ' ========')
 
-    for i in range(0, len(results), 50): # plotting the samples in the test set
+    for i  in [874]: # range(0, len(results), 10): # plotting the samples in the test set
 
         results_i = results[i]
         true_trajectories = results_i[0]
@@ -309,15 +391,15 @@ def main():
         grid_seq = results_i[10]
         grid_seq_veh = results_i[11]
 
-        results_SocialLSTM_i = results_SocialLSTM[i]
-        pred_trajectories_SocialLSTM = results_SocialLSTM_i[1]
-        grid_seq_SocialLSTM = results_SocialLSTM_i[10]
+        results_SocialLSTM_i = None # results_SocialLSTM[i]
+        pred_trajectories_SocialLSTM = None # results_SocialLSTM_i[1]
+        grid_seq_SocialLSTM = None # results_SocialLSTM_i[10]
 
-        results_VLSTM_i = results_VLSTM[i]
-        pred_trajectories_VLSTM = results_VLSTM_i[1]
+        results_VLSTM_i = None # results_VLSTM[i]
+        pred_trajectories_VLSTM = None # results_VLSTM_i[1]
 
-        results_LR_i = results_LR[i]
-        pred_trajectories_LR = results_LR_i[1]
+        results_LR_i = None # results_LR[i]
+        pred_trajectories_LR = None # results_LR_i[1]
 
 
         # covnert dist_param_seq to a torch tensor
