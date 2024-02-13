@@ -162,13 +162,10 @@ cython_debug/
 /Store_Results/model/saved_model
 /Store_Results/model/config.pkl
 /Store_Results/log
-/Store_Results/plot
+# /Store_Results/plot
+/Store_Results/plot/test/plt
 
-/Store_Results/Adding covariance as input
-/Store_Results/Bh distance loss with Kalman Filter
-/Store_Results/GT2Distribution Loss error
-/Store_Results/Increaing batch_size to 100
-/Store_Results/Just Dist2Dist uncertainty loss
 
-/Store_Results/model/
-/Store_Results/
+# /Store_Results/model/
+# /Store_Results/
+/Store_Results/Correct final ones
