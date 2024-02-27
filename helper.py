@@ -367,7 +367,7 @@ def get_final_error(ret_nodes, nodes, assumedNodesPresent, ObsNodesPresent, look
         nodeID = int(nodeID)
 
 
-        if nodeID not in ObsNodesPresent: # When this will happen?!
+        if nodeID not in ObsNodesPresent:
             continue
 
         nodeID = look_up[nodeID]
@@ -429,7 +429,7 @@ def get_hausdorff_distance(ret_nodes, nodes, assumedNodesPresent, ObsNodesPresen
     Error : The largest distance from each predicted point to any point on the ground truth trajectory (Modified Hausdorff Distance: MHD)
     '''
     pred_length = ret_nodes.size()[0]
-    PedsPresent = list(set(sum(assumedNodesPresent, []))) # getting a list of all non repeating agetn ids present in the prediction length
+    PedsPresent = list(set(sum(assumedNodesPresent, []))) # getting a list of all non repeating agent ids present in the prediction length
     Valid_PedsPresent = [i for i in PedsPresent if i in ObsNodesPresent] # elimiating those agents that did not have any observation data and
     # only appread during the prediction length
     num_agents = len(Valid_PedsPresent)
@@ -556,10 +556,6 @@ def within_sigma_levels(point, mean, covariance):
     '''
 
     # Calculate the Mahalanobis distance
-    # delta = point - mean
-    # inv_covariance = torch.inverse(covariance)
-    # mahalanobis_distance = torch.sqrt(torch.matmul(torch.matmul(delta, inv_covariance), delta))
-
     _mahalanobis_distance = mahalanobis_distance(point, mean, covariance).item()
 
     # Determine the critical values for 1-sigma, 2-sigma, and 3-sigma levels
@@ -567,11 +563,6 @@ def within_sigma_levels(point, mean, covariance):
     critical_value_1sigma = np.sqrt(chi2.ppf(0.39, dim))
     critical_value_2sigma = np.sqrt(chi2.ppf(0.86, dim))
     critical_value_3sigma = np.sqrt(chi2.ppf(0.99, dim))
-
-    # chi2_distribution =  torch.distributions.Chi2(df=dim)
-    # critical_value_1sigma = torch.sqrt(chi2_distribution.icdf(torch.tensor(0.68)))
-    # critical_value_2sigma = torch.sqrt(chi2_distribution.icdf(torch.tensor(0.95)))
-    # critical_value_3sigma = torch.sqrt(chi2_distribution.icdf(torch.tensor(0.997)))
 
     # Check if the Mahalanobis distance is within the sigma levels
     within_1sigma = int(_mahalanobis_distance <= critical_value_1sigma)
@@ -615,16 +606,6 @@ def Delta_Empirical_Sigma_Value(dist_param, orig_x, PedsList, PedsList_obs, usin
     # leave the calculation of the fraction to when we have the predictions for all the data in test set
     # and just report the difference and the counter here
     return is_in_1_sigma, is_in_2_sigma, is_in_3_sigma, counter
-
-    # fraction_1sigma = is_in_1_sigma/counter
-    # fraction_2sigma = is_in_2_sigma/counter
-    # fraction_3sigma = is_in_3_sigma/counter
-
-    # diff_1sigma = fraction_1sigma - 0.68
-    # diff_2sigma = fraction_2sigma - 0.95
-    # diff_3sigma = fraction_3sigma - 0.997
-
-    # return diff_1sigma, diff_2sigma, diff_3sigma
 
 
 
@@ -686,19 +667,7 @@ def cov_mat_generation(dist_param): # the input should be dist_param after the s
         torch.stack([rho_sigma_xy, sigma_y2], dim=-1)
         ], dim=-2)
 
-    # test_cov = torch.zeros((cov_mat.shape[0], cov_mat.shape[1], 2, 2))
-    # for t in range(cov_mat.shape[0]):
-    #     for ped in range(cov_mat.shape[1]):
-    #         test_cov[t,ped,:,:] = torch.tensor([[sigma_x2[t, ped], rho_sigma_xy[t, ped]], [rho_sigma_xy[t, ped], sigma_y2[t, ped]]])
-    
-    
-    # print('==== check rho ====')
-    # print('rho:', rho[-1,-3])
-    # # print('>>>>> compare <<<<<')
-    # # print('cov_mat:', cov_mat[-1,-3,:,:])
-    # # print('test_cov:', test_cov[-1,-3,:,:])
-    
-    # I guess there is no need for worrying about the non-existing peds of the corrent steps in the output
+    # There is no need for worrying about the non-existing peds of the current steps in the output
     # as the distribution parameters for those peds are all zeros and the cov_mat will be all zeros as well
     # each row is the cov_mat of the prediction we have for that specifc time step
     
@@ -727,14 +696,7 @@ def mahalanobis_distance(GT, mean, covariance):
     mahalanobis_dist = torch.matmul(delta.transpose(-1, -2), mahalanobis_dist).squeeze(-1) # transpose should be between -2,-3
     mahalanobis_dist = torch.sqrt(mahalanobis_dist).squeeze(-1)
 
-
     return mahalanobis_dist
-
-# def probability_within_confidence_interval(mahalanobis_dist, dof=2):
-#     # Calculate the probability using the chi-squared CDF
-#     probability = chi2.cdf(mahalanobis_dist, df=dof)
-
-#     return probability
 
 
 def bhattacharyya_distance(mu1, cov1, mu2, cov2):
@@ -760,13 +722,9 @@ def bhattacharyya_distance(mu1, cov1, mu2, cov2):
     mahalanobis_sq = torch.matmul(diff.transpose(-1,-2), torch.matmul(torch.inverse(cov_avg), diff)).squeeze(-1).squeeze(-1)  
     bhattacharyya_coeff = 0.125 * mahalanobis_sq + 0.5 * torch.logdet(cov_avg) - 0.25 * (torch.logdet(cov1) + torch.logdet(cov2))
 
-    # print('cov2:', cov2.reshape(cov2.shape[0], cov2.shape[1],4))
-    # print('det(cov2):', torch.det(cov2))
-
     # Calculate Bhattacharyya distance
     bhatt_distance = bhattacharyya_coeff # -torch.log(torch.exp(-bhattacharyya_coeff))
 
-    # print('bhatt_distance:', bhatt_distance)
 
     return bhatt_distance
 
@@ -815,7 +773,7 @@ def uncertainty_aware_loss_Point2Dist(outputs, targets, mask, use_cuda):
     result = mahalanobis_dist # testing minimizing the mahalanobis distance itself instead of its -log(probability)
 
 
-    result = result * mask # this will make those elements that do not existm don't count (those peds that have no data)
+    result = result * mask # this will make those elements that do not exist don't count (those peds that have no data)
     # sum all the numbers in the tensor
     loss = torch.sum(result)
     # the overall distances for all the peds in the sequence
@@ -857,7 +815,6 @@ def uncertainty_aware_loss_Dist2Dist(outputs, targets_mean, targets_cov, mask, u
     # # Numerical stability
     # epsilon = 1e-20
     # result = -torch.log(torch.clamp(Bh_coef, min=epsilon)) # this is the negative log of the Bhattacharyya coefficient
-    # # Bh_dist = -torch.log(torch.clamp((1-Bh_dist), min=epsilon)) # considering that Bh_dist remains between 0 and 1 as I see in my simulation
 
     result = Bh_dist * mask # this will make those elements that do not exist, don't count (those peds that have no data)
     # sum all the numbers in the tensor
@@ -871,22 +828,28 @@ def uncertainty_aware_loss_Dist2Dist(outputs, targets_mean, targets_cov, mask, u
     
 
 
-def combination_loss_Point2Dist(outputs, targets, nodesPresent, look_up, mask, use_cuda ):
+def combination_loss_Point2Dist(outputs, targets, nodesPresent, look_up, mask, use_cuda, uncertainty_aware=True):
 
     w = 10
     NLL_loss = Gaussian2DLikelihood(outputs, targets, nodesPresent, look_up)
     uncertainty_loss = uncertainty_aware_loss_Point2Dist(outputs, targets, mask, use_cuda)
-    loss = NLL_loss + w * uncertainty_loss
+    if uncertainty_aware:
+        loss = NLL_loss + w * uncertainty_loss
+    else:
+        loss = NLL_loss
 
     return loss, NLL_loss, w * uncertainty_loss
 
 
-def combination_loss_Dist2Dist(outputs, targets_mean, targets_cov, nodesPresent, look_up, mask, use_cuda):
+def combination_loss_Dist2Dist(outputs, targets_mean, targets_cov, nodesPresent, look_up, mask, use_cuda, uncertainty_aware=True):
    
     w = 10
     NLL_loss = Gaussian2DLikelihood(outputs, targets_mean, nodesPresent, look_up)
     uncertainty_loss = uncertainty_aware_loss_Dist2Dist(outputs, targets_mean, targets_cov, mask, use_cuda)
-    loss = NLL_loss + w * uncertainty_loss # might need a weight for each loss in this case since they might not be in the same scale
+    if uncertainty_aware:
+        loss = NLL_loss + w * uncertainty_loss
+    else:
+        loss = NLL_loss
    
     return loss, NLL_loss, w*uncertainty_loss
 
@@ -1019,3 +982,21 @@ def kalman_filter(x, P, measurements, R, Q, F, H):
     filtered_states = torch.stack(filtered_states, dim=0)
 
     return filtered_states.squeeze(-1), filtered_covariances
+
+
+def calculate_mean_and_std(data):
+    """
+    Calculate the mean and standard deviation of a list of numbers.
+
+    Parameters:
+    - data: List of numbers
+
+    Returns:
+    - mean: Mean of the data
+    - std_dev: Standard deviation of the data
+    """
+
+    data = np.asarray(data)
+    mean = np.mean(data)
+    std_dev = np.std(data)
+    return mean, std_dev
