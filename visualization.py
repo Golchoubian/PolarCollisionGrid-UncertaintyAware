@@ -15,11 +15,10 @@ def get_cmap(n, name='hsv'):
     return plt.cm.get_cmap(name, n)
 
 
-def plot_trajecotries(true_trajectories,pred_trajectories,pred_trajectories_SocialLSTM,
-                      pred_trajectories_VLSTM,pred_trajectories_LR,obs_len,batch,
+def plot_trajecotries(true_trajectories,pred_trajectories,obs_len,batch,
                       dist_param_seq,PedsList_seq,lookup,true_trajectories_veh=None,
-                      VehsList_seq=None,lookup_seq_veh=None, grid_seq=None, grid_seq_veh=None,
-                      grid_seq_SocialLSTM=None, is_train=False, frame_i=5):
+                      VehsList_seq=None,lookup_seq_veh=None, grid_seq=None, 
+                      grid_seq_veh=None, is_train=False, frame_i=5):
 
     num_ped = pred_trajectories.shape[1]
     seq_len = pred_trajectories.shape[0]
@@ -84,9 +83,8 @@ def plot_trajecotries(true_trajectories,pred_trajectories,pred_trajectories_Soci
     mux, muy, sx, sy, corr = getCoef(dist_param_seq)
     scaled_param_dist = torch.stack((mux, muy, sx, sy, corr), 2)
     cov_matrix = cov_mat_generation(scaled_param_dist)
-    # print('cov_matrix.shape: ', cov_matrix.shape)
 
-    zoomed_ped_id = 3
+
     for agent_index in range(num_ped): # for each agent plotting its trajecotry for the frames the agent is present
 
         # finding the id of the agent usign the lookup dictionary, 
@@ -108,12 +106,7 @@ def plot_trajecotries(true_trajectories,pred_trajectories,pred_trajectories_Soci
             if agent_id in PedsList_seq[frame]:
                 pred_frame_nums.append(frame)
 
-        ### Ground truth:
-        # alpha_val = 1.0 # transparancy value
-        # all_frame = obs_frame_nums + pred_frame_nums
-        # ax.plot(true_trajectories[all_frame,agent_index,0], true_trajectories[all_frame,agent_index,1],
-        #           c='0.0', linewidth=2.0, alpha=alpha_val)
-                
+        ### Ground truth:           
         alpha_val = 1.0 # transparancy value
         # observed traj
         ax.plot(true_trajectories[obs_frame_nums,agent_index,0], true_trajectories[obs_frame_nums,agent_index,1],
@@ -129,24 +122,20 @@ def plot_trajecotries(true_trajectories,pred_trajectories,pred_trajectories_Soci
         # prediction of CollisionGrid
         for f in pred_frame_nums:
             marker_size = min_size + ((max_size-min_size)/seq_len * f)
-            # ax.plot(pred_trajectories[f,agent_index,0], pred_trajectories[f,agent_index,1],
-            #           c='b', ls=":", marker='d', markersize=marker_size)
-            # plot also the current positions 1,2,3 sigma confidence interval
+            # plot also the current positions 1 sigma confidence interval
             mean = dist_param_seq[f,agent_index,:2]
             cov = cov_matrix[f,agent_index]
             plot_bivariate_gaussian3(mean, cov, ax, 1)
         ax.plot(pred_trajectories[pred_frame_nums,agent_index,0], pred_trajectories[pred_frame_nums,agent_index,1],
                   c='r', linestyle = (0,(1,0.7)), linewidth=2)
-        # ax.plot(dist_param_seq[pred_frame_nums,agent_index,0], dist_param_seq[pred_frame_nums,agent_index,1],
-        #           c='b', ls="-", linewidth=1.0)
 
 
+        zoomed_ped_id = 3
         if agent_index == zoomed_ped_id: 
             # ============ zoomed in plot ============
             # Define the inset axis position
-            left, bottom, width, height = 1.0, 1.0, 0.5, 0.5
-            ax_inset = inset_axes(ax, width='35%', height='35%', loc='upper left') #,
-                                #   bbox_to_anchor=(left, bottom, width, height))
+            ax_inset = inset_axes(ax, width='35%', height='35%', loc='upper left') 
+
             # Plot the zoomed-in data
             for f in pred_frame_nums:
                 marker_size = min_size + ((max_size-min_size)/seq_len * f)
@@ -174,8 +163,6 @@ def plot_trajecotries(true_trajectories,pred_trajectories,pred_trajectories_Soci
             # sceanrio 874
             ax_inset.set_xlim(50.5, 51.8)  # Set x-axis range
             ax_inset.set_ylim(37.7, 39)  # Set y-axis range
-            # ax_inset.set_xlim(50, 51.7)  # Set x-axis range
-            # ax_inset.set_ylim(37.5, 40.5)  # Set y-axis range
             
             # # sceanrio 871
             # ax_inset.set_xlim(50.5, 51.5)  # Set x-axis range
@@ -213,9 +200,9 @@ def plot_trajecotries(true_trajectories,pred_trajectories,pred_trajectories_Soci
                  c='0.5', linewidth=2.0)
 
     
-    # =========================================================================================================================================
-    # =============================================================== Neigbors ================================================================
-    # =========================================================================================================================================
+    # ===================================================================
+    # ============================= Neigbors ============================
+    # ===================================================================
 
     alphabet = list(string.ascii_uppercase)
     label_font_size = 12
@@ -228,7 +215,13 @@ def plot_trajecotries(true_trajectories,pred_trajectories,pred_trajectories_Soci
         for indx, nodes_pre in enumerate(PedsList_seq[frame_i]):
             agent_i = lookup[nodes_pre]
             label = "Ped " + alphabet[indx]
-            if indx < 7:
+
+            # ax.plot(true_trajectories[frame_i, agent_i,0], true_trajectories[frame_i, agent_i,1], 
+            #             color='k', marker="*", markersize=9)
+            # ax.text(true_trajectories[frame_i, agent_i,0], true_trajectories[frame_i, agent_i,1],
+            #     label, fontsize = label_font_size, color ="k") 
+            
+            if agent_i < 7:
                 if indx in [1]:
                     ax.plot(true_trajectories[frame_i, agent_i,0], true_trajectories[frame_i, agent_i,1], 
                             color='k', marker="*", markersize=9)
@@ -265,18 +258,10 @@ def plot_trajecotries(true_trajectories,pred_trajectories,pred_trajectories_Soci
         for indx, nodes_pre in enumerate(VehsList_seq[frame_i]):
             label_veh = "Veh " + alphabet[indx]
             agent_i = lookup_seq_veh[nodes_pre]
-            if (any(grid_seq_veh[frame_i][ego_agent_indx_in_pedlist,indx,:])): # This agent is in the grid of the ego agent.
-                plt.plot(true_trajectories_veh[frame_i, agent_i,0], true_trajectories_veh[frame_i, agent_i,1], 
+            ax.plot(true_trajectories_veh[frame_i, agent_i,0], true_trajectories_veh[frame_i, agent_i,1], 
                          color='0.3', marker="*", markersize=11)
-                ax.text(true_trajectories_veh[frame_i, agent_i,0]-0.5, true_trajectories_veh[frame_i, agent_i,1]-1.5,
-                         label_veh, fontsize = label_font_size, color ="k") 
-           
-            else: # This agent is presnet but not in the gird of the ego agent
-                ax.plot(true_trajectories_veh[frame_i, agent_i,0], true_trajectories_veh[frame_i, agent_i,1], 
-                         color='0.3', marker="*", markersize=11)
-                ax.text(true_trajectories_veh[frame_i, agent_i,0]-0.5, true_trajectories_veh[frame_i, agent_i,1]-1.5,
-                         label_veh, fontsize = label_font_size, color ="k") 
-               
+            ax.text(true_trajectories_veh[frame_i, agent_i,0]-0.5, true_trajectories_veh[frame_i, agent_i,1]-1.5,
+                        label_veh, fontsize = label_font_size, color ="k") 
 
     # legends
     ax.plot(-100,-100, c='b', ls='-', label='$1\sigma$ std. pred')
@@ -341,38 +326,17 @@ def Loss_Plot(train_batch_num, error_batch, loss_batch, file_name, x_axis_label,
 
 def main():
 
+    file_path_PCG = "Store_Results/plot/test/PCG/test_results.pkl"
+    file_path_UAWPCG = "Store_Results/plot/test/UAWPCG/test_results.pkl"
+    file_path = file_path_UAWPCG # file_path_PCG OR file_path_UAWPCG
 
-    # file_path_collisionGrid = "Store_Results/plot/test/CollisionGrid/test_results.pkl"
-    file_path_collisionGrid = "Store_Results/plot/test/test_results.pkl"
-
-    file_path_SocialLSTM = "Store_Results/plot/test/SocialLSTM/test_results.pkl"
-    file_path_VLSTM = "Store_Results/plot/test/VLSTM/test_results.pkl"
-    file_path_LR = "Store_Results/plot/test/LR/test_results.pkl"
-
+   
     try:
-        f_collisionGrid = open(file_path_collisionGrid, 'rb')
+        f = open(file_path, 'rb')
     except FileNotFoundError:
-        print("File not found: %s"%file_path_collisionGrid)
+        print("File not found: %s"%file_path)
 
-    try:
-        f_SocialLSTM = open(file_path_SocialLSTM, 'rb')
-    except FileNotFoundError:
-        print("File not found: %s"%file_path_SocialLSTM)
-
-    try:
-        f_VLSTM = open(file_path_VLSTM, 'rb')
-    except FileNotFoundError:
-        print("File not found: %s"%file_path_VLSTM)
-
-    try:
-        f_LR = open(file_path_LR, 'rb')
-    except FileNotFoundError:
-        print("File not found: %s"%file_path_LR)
-
-    results = pickle.load(f_collisionGrid)
-    results_SocialLSTM = pickle.load(f_SocialLSTM)
-    results_VLSTM = pickle.load(f_VLSTM)
-    results_LR = pickle.load(f_LR)
+    results = pickle.load(f)
 
     print("====== The total number of data in the test set is: " + str(len(results)) + ' ========')
 
@@ -391,24 +355,14 @@ def main():
         grid_seq = results_i[10]
         grid_seq_veh = results_i[11]
 
-        results_SocialLSTM_i = None # results_SocialLSTM[i]
-        pred_trajectories_SocialLSTM = None # results_SocialLSTM_i[1]
-        grid_seq_SocialLSTM = None # results_SocialLSTM_i[10]
-
-        results_VLSTM_i = None # results_VLSTM[i]
-        pred_trajectories_VLSTM = None # results_VLSTM_i[1]
-
-        results_LR_i = None # results_LR[i]
-        pred_trajectories_LR = None # results_LR_i[1]
 
 
         # covnert dist_param_seq to a torch tensor
         dist_param_seq = torch.from_numpy(dist_param_seq)
         
-        plot_trajecotries(true_trajectories,pred_trajectories,pred_trajectories_SocialLSTM,
-                          pred_trajectories_VLSTM,pred_trajectories_LR,obs_length,i,
-                          dist_param_seq,PedsList_seq,lookup_seq,true_trajectories_veh,
-                          VehsList_seq,lookup_seq_veh, grid_seq,grid_seq_veh,grid_seq_SocialLSTM)
+        plot_trajecotries(true_trajectories, pred_trajectories, obs_length,i,
+                          dist_param_seq, PedsList_seq, lookup_seq, true_trajectories_veh,
+                          VehsList_seq, lookup_seq_veh, grid_seq, grid_seq_veh)
 
 if __name__ == '__main__':
     main()
