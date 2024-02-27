@@ -40,15 +40,15 @@ def main():
 
     # method selection. this have to match with the training method manually
     parser.add_argument('--method', type=int, default=4,
-                            help='Method of lstm being used (1 = social lstm, 3 = vanilla lstm, 4 = collision grid)')
+                            help='Method of lstm being used (1 = social lstm, 3 = vanilla lstm, 4 = PCG, 5 = UAW-PCG)')
 
     # Model to be loaded (saved model (the epoch #) during training
     # with the best performace according to previous invesigation on valiquation set)
-    parser.add_argument('--epoch', type=int, default= 190, # 115, # 181, 3, 196
+    parser.add_argument('--epoch', type=int, default= 175, # PCG: 196, UAW-PCG: 175
                             help='Epoch of model to be loaded')
     
     # The number of samples to be generated for each test data, when reporting its performance
-    parser.add_argument('--sample_size', type=int, default=20,
+    parser.add_argument('--sample_size', type=int, default=1,
                             help='The number of sample trajectory that will be generated')
         
 
@@ -68,8 +68,9 @@ def main():
         # save_directory = os.path.join(save_directory_pre, 'VanillaLSTM/')
         save_directory = save_directory_pre
     elif sample_args.method == 4:
-        # save_directory = os.path.join(save_directory_pre, 'CollisionGrid/')
-        save_directory = save_directory_pre
+        # save_directory = os.path.join(save_directory_pre, 'PCG/')
+        save_directory = os.path.join(save_directory_pre, 'UAW-PCG/')
+        # save_directory = save_directory_pre     
     else:
         raise ValueError('The selected method is not defined!')
 
@@ -116,7 +117,7 @@ def main():
     # This iteration is for testing the results for different stages of the trained model
     # (the stored paramters of the model at different iterations)
     start_iteration = 0
-    for iteration in [0]: #range(start_iteration, sample_args.iteration): 
+    for iteration in [0]: # range(start_iteration, sample_args.iteration): 
         # Initialize net
         net = get_model(sample_args.method, saved_args, True)
 
