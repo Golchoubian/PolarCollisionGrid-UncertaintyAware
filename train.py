@@ -23,7 +23,7 @@ The Social LSTM model itself is also used as a baseline for comparison with our 
 def main():
     parser = argparse.ArgumentParser()
     # RNN size parameter (dimension of the output/hidden state)
-    parser.add_argument('--input_size', type=int, default=6) # adding the covariance matrix to the input, so the input size changes from 2 to 6
+    parser.add_argument('--input_size', type=int, default=2) # adding the covariance matrix to the input, so the input size changes from 2 to 6
     parser.add_argument('--output_size', type=int, default=5)
     # RNN size parameter (dimension of the output/hidden state)
     parser.add_argument('--rnn_size', type=int, default=128,
@@ -511,8 +511,8 @@ def train(args):
                 # Compute loss
                 # loss = Gaussian2DLikelihood(outputs, y_seq, PedsList_seq[1:], lookup_seq)
                 # loss = uncertainty_aware_loss(outputs, y_seq, mask[1:], args.use_cuda)
-                # loss, NLL_loss, uncertainty_loss = combination_loss_Point2Dist(outputs, y_seq,  PedsList_seq[1:], lookup_seq, mask[1:], args.use_cuda)
-                loss, NLL_loss, uncertainty_loss = combination_loss_Dist2Dist(outputs, y_seq, y_dis_cov, PedsList_seq[1:], lookup_seq, mask[1:], args.use_cuda)
+                loss, NLL_loss, uncertainty_loss = combination_loss_Point2Dist(outputs, y_seq,  PedsList_seq[1:], lookup_seq, mask[1:], args.use_cuda)
+                # loss, NLL_loss, uncertainty_loss = combination_loss_Dist2Dist(outputs, y_seq, y_dis_cov, PedsList_seq[1:], lookup_seq, mask[1:], args.use_cuda)
                 # print('<<<<<<<<<<<<<>>>>>>>>>>>>>')
                 # print('loss: {}'.format(loss))
                 # print("NLL_loss: {}".format(NLL_loss))
