@@ -5,7 +5,7 @@ This repository contains the code for the uncertainty-aware version of the polar
 
 ## Overview
 
-The presented uncertainty-aware pedestrian trajectory prediction model is based on the Polar Collision Grid (PCG) model introduced in our ITSC2023 paper. However, we have enhanced this model by training it with a novel uncertainty-aware loss function. This modification aims to improve the accuracy of predicting the covariance of future positions within the forecasted distribution. The original PCG model, trained solely with the Negative Log Likelihood loss, tends to generate overconfident predictions. To address this issue, we introduced an uncertainty-loss component which penalizes the distance of the ground truth position from the predicted distribution (Point2Dist loss). This addition has proven to enhance the performance of our model, as detailed in our paper.
+The presented uncertainty-aware pedestrian trajectory prediction model is based on the Polar Collision Grid (PCG) model introduced in our ITSC2023 paper. However, we have enhanced this model by training it with a novel uncertainty-aware loss function. This modification aims to improve the accuracy of predicting the covariance of future positions within the forecasted distribution. The original PCG model, trained solely with the Negative Log Likelihood loss, tends to generate overconfident predictions. To address this issue, we introduced an uncertainty-loss component which penalizes the mahalanobis distance of the ground truth position from the predicted distribution (Point2Dist loss). This addition has proven to enhance the performance of our model, as detailed in our paper.
 
 
 ## Setup
@@ -26,7 +26,14 @@ The [HBS dataset](https://leopard.tu-braunschweig.de/receive/dbbs_mods_00069907)
 
 ## Model training
 
-Our Polar Collision Grid model, as well as any of the data-driven baseline models (Social LSTM and Vanilla LSTM), can be trained for 200 epochs by executing the `train.py` file. A log file containing progress information during training will be stored under `Store_Results\log`. Following the completion of each epoch, the model will be saved in the `Store_Results\model` directory. Additionally, a plot illustrating the average displacement error and Negative Log Likelihood loss over epochs, and a more detailed one over batch numbers, will be saved in the `Store_Results\plot\train\` directory.
+The Polar Collision Grid model can undergo training in either its original format, utilizing only NLL loss, or in the uncertainty-aware version with the novel combination loss, adjustable through the `uncertainty-aware` argument in the `train.py` file. In this improved code version, we have also incorporated the option to train the model without teacher forcing. By setting the teacher-forcing argument to False, the model relies on its own predicted outputs even during the training phase, rather than the ground truth for the prediction length. The remaining functionalities remain consistent with those described in the original PCG model's repository.
+
+Additionally, we have developed another uncertainty-aware loss function, termed Dist2Dist loss, which aims to minimize the distance between the prediction distribution and a ground truth distribution derived from a Kalman filter applied to the ground truth position. However, the results reported in the paper are based on the Point2Dist loss function.
+
+In both scenarios, the code provides the option to include the covariance matrix as an additional input to the model. This can be achieved by setting the `input_size` argument to 6 in the `train.py` file.
+
+The same training process can be applied to other baseline methods (Social LSTM, Vanilla LSTM) available in the code by adjusting the `model` argument.
+
 
 ## Model evaluation
 
