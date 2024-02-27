@@ -8,10 +8,9 @@ def main():
     parser = argparse.ArgumentParser() 
 
     # method selection
-    parser.add_argument('--method', type=int, default=4,
+    parser.add_argument('--method', type=int, default=5,
                             help='Method you want to display its test result  \
-                            (1 = social-lstm, 3 = vanilla-lstm, 4 = PV-collisionGrid, 5 = Linear-regression \
-                             6 = P-collisionGrid, 7 = V-collisionGrid)') 
+                            (4 = PCG, 5 = UAW-PCG ') 
     # Minimum acceptalbe distance between two pedestrians
     parser.add_argument('--D_min', type=int, default=0.7, 
                         help='Minimum distance for which the TTC is calculated')
@@ -21,43 +20,24 @@ def main():
     args = parser.parse_args()
 
 
-    file_path_PV_collisionGrid = "Store_Results/plot/test/CollisionGrid/PV-CollisionGrid/test_results.pkl"
-    file_path_P_collisionGrid = "Store_Results/plot/test/CollisionGrid/P-CollisionGrid/test_results.pkl"
-    file_path_V_collisionGrid = "Store_Results/plot/test/CollisionGrid/V-CollisionGrid/test_results.pkl"
-    file_path_SocialLSTM = "Store_Results/plot/test/SocialLSTM/test_results.pkl"
-    file_path_VLSTM = "Store_Results/plot/test/VLSTM/test_results.pkl"
-    file_path_LR = "Store_Results/plot/test/LR/test_results.pkl"
+    file_path_PCG = "Store_Results/plot/test/PCG/test_results.pkl"
+    file_path_UAWPCG = "Store_Results/plot/test/UAWPCG/test_results.pkl"
 
-
-    if args.method == 1:
-        file_path = file_path_SocialLSTM
-        print("====== Social LSTM results ======")
-    elif args.method == 3:
-        file_path = file_path_VLSTM
-        print("====== Vanilla LSTM results ======")
-    elif args.method == 4:
-        file_path = file_path_PV_collisionGrid
-        print("====== PV_CollisionGrid results ======")
+    if args.method == 4:
+        file_path = file_path_PCG
+        print("====== PCG results ======")
     elif args.method == 5:
-        file_path = file_path_LR
-        print("====== Linear Regression results ======")
-    elif args.method == 6:
-        file_path = file_path_P_collisionGrid
-        print("====== P_CollisionGrid results (oblation study)======")
-    elif args.method == 7:
-        file_path = file_path_V_collisionGrid
-        print("====== V_CollisionGrid results (oblation study)======")
+        file_path = file_path_UAWPCG
+        print("====== UAW-PCG ======")
     else:
         raise ValueError("Invalid method number")
     
     try:
         f = open(file_path, 'rb')
     except FileNotFoundError:
-        print("File not found: %s"%file_path_PV_collisionGrid)
+        print("File not found: %s"%file_path)
 
     results = pickle.load(f)
-
-    # print("====== The total number of data in the test set is: " + str(len(results)) + ' ========')
 
     ave_error = []
     final_error = []
@@ -68,6 +48,11 @@ def main():
     all_num_cases_homo = []
     num_coll_hetero = []
     all_num_cases_hetero = []
+    NLL_list = []
+    ESV_sigma1 = []
+    ESV_sigma2 = []
+    ESV_sigma3 = []
+    data_point_num = 0
 
     for i in range(len(results)): # each i is one sample or batch (since batch_size is 1 during test)
 
@@ -87,6 +72,8 @@ def main():
         pred_trajectories = torch.from_numpy(pred_trajectories)
         true_trajectories = torch.from_numpy(true_trajectories)
         true_trajectories_veh = torch.from_numpy(true_trajectories_veh)
+        dist_param_seq = torch.from_numpy(dist_param_seq)
+
 
         
         PedsList_obs = sum(PedsList_seq[:obs_length], [])
@@ -110,6 +97,17 @@ def main():
                                                                                         VehsList_seq[obs_length:], lookup_seq_veh,
                                                                                         args.D_min_veh)
 
+        NLL_list_batch, _ = get_mean_NLL(dist_param_seq[obs_length:,:,:],
+                                            true_trajectories[obs_length:,:,:2],
+                                            PedsList_seq[obs_length:], 
+                                            PedsList_obs, False, lookup_seq)
+                
+        ESV_sigma1_batch, ESV_sigma2_batch, ESV_sigma3_batch, counter = Delta_Empirical_Sigma_Value(
+                                                                                            dist_param_seq[obs_length:,:,:],
+                                                                                            true_trajectories[obs_length:,:,:2],
+                                                                                            PedsList_seq[obs_length:], PedsList_obs,
+                                                                                            False, lookup_seq)
+
         ave_error.append(error_batch)
         final_error.append(final_error_batch)
         MHD_error.append(MHD_error_batch)
@@ -121,18 +119,39 @@ def main():
         num_coll_hetero.append(num_coll_hetero_batch)
         all_num_cases_hetero.append(all_num_cases_hetero_batch)
 
+        NLL_list.extend(NLL_list_batch)
+        ESV_sigma1.append(ESV_sigma1_batch)
+        ESV_sigma2.append(ESV_sigma2_batch)
+        ESV_sigma3.append(ESV_sigma3_batch)
+        data_point_num += counter
 
-    print('Average displacement error (ADE) of the model is: ', round(sum(ave_error).item() / len(results),4)) 
-    print('Final displacement error (FDE) of the model is: ', round(sum(final_error).item() / len(results), 4))
-    print('Hausdorff distance error (MHD) of the model is: ', round(sum(MHD_error).item() / len(results), 4))
-    print('Speed error (SE) of the model is: ', round((sum(speed_error).item() / len(results))**0.5, 4))
-    print('Average heading error (HE) of the model is: ', round((sum(heading_error).item() /len(results))**0.5, 2))
-    # print('Overll percentage of collision of the model is ', 
-    #       round((sum(num_coll_homo)+sum(num_coll_hetero))/(sum(all_num_cases_homo)+sum(all_num_cases_hetero)) * 100, 4))
-    # print('Percentage of collision between pedestrians of the model is ',
-    #       round(sum(num_coll_homo)/sum(all_num_cases_homo) * 100, 4))
-    # print('Percentage of collision between pedestrians and vehicles of the model is ',
-    #       round(sum(num_coll_hetero)/sum(all_num_cases_hetero) * 100, 4))
+    ADE = sum(ave_error).item() / len(results)
+    FDE = sum(final_error).item() / len(results)
+    MHD = sum(MHD_error).item() / len(results)
+    SE = sum(speed_error).item() / len(results)
+    HE = sum(heading_error).item() /len(results)
+    Collision = (sum(num_coll_homo)+sum(num_coll_hetero))/(sum(all_num_cases_homo)+sum(all_num_cases_hetero)) * 100
+    Collision_pedped = sum(num_coll_homo)/sum(all_num_cases_homo) * 100
+    Collision_pedveh = sum(num_coll_hetero)/sum(all_num_cases_hetero) * 100
+    
+    NLL_mean, NLL_std = calculate_mean_and_std(NLL_list)
+    sigma1 = (sum(ESV_sigma1) / data_point_num)-0.39
+    sigma2 = (sum(ESV_sigma2) / data_point_num)-0.86
+    sigma3 = (sum(ESV_sigma3) / data_point_num)-0.99
+
+
+    print('Average displacement error (ADE): ', round(ADE,4)) 
+    print('Final displacement error (FDE): ', round(FDE, 4))
+    print('Hausdorff distance error (MHD): ', round(MHD, 4))
+    # print('Speed error (SE): ', round(SE, 4))
+    # print('Average heading error (HE): ', round(HE, 2))
+    # print('Overll percentage of collision:', round(Collision, 4))
+    # print('Percentage of collision between pedestrians: ', round(Collision_pedped, 4))
+    # print('Percentage of collision between pedestrians and vehicles:', round(Collision_pedveh, 4))
+    print('NLL: ', round(NLL_mean,4), '±', round(NLL_std,4))
+    print('ESV_sigma1: ', round(sigma1,4))
+    print('ESV_sigma2: ', round(sigma2,4))
+    print('ESV_sigma3: ', round(sigma3,4))
 
 
 if __name__ == '__main__':
