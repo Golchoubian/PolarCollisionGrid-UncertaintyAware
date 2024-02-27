@@ -40,7 +40,10 @@ def main():
 
     # method selection. this have to match with the training method manually
     parser.add_argument('--method', type=int, default=4,
-                            help='Method of lstm being used (1 = social lstm, 3 = vanilla lstm, 4 = PCG, 5 = UAW-PCG)')
+                            help='Method of lstm being used (1 = social lstm, 3 = vanilla lstm, 4 = collision grid')
+    
+    # Wether the model is trained with uncertainty aware loss or not
+    parser.add_argument('--uncertainty_aware', type=bool, default=True) # True for UAW-PCG, False for PCG
 
     # Model to be loaded (saved model (the epoch #) during training
     # with the best performace according to previous invesigation on valiquation set)
@@ -65,12 +68,12 @@ def main():
     if sample_args.method == 1:
         save_directory = os.path.join(save_directory_pre, 'SocialLSTM/') 
     elif sample_args.method == 3:
-        # save_directory = os.path.join(save_directory_pre, 'VanillaLSTM/')
-        save_directory = save_directory_pre
+        save_directory = os.path.join(save_directory_pre, 'VanillaLSTM/')
     elif sample_args.method == 4:
-        # save_directory = os.path.join(save_directory_pre, 'PCG/')
-        save_directory = os.path.join(save_directory_pre, 'UAW-PCG/')
-        # save_directory = save_directory_pre     
+        if sample_args.uncertainty_aware:
+            save_directory = os.path.join(save_directory_pre, 'UAW-PCG/')
+        else:
+            save_directory = os.path.join(save_directory_pre, 'PCG/')       
     else:
         raise ValueError('The selected method is not defined!')
 
@@ -112,8 +115,8 @@ def main():
     smallest_err = 100000
     smallest_err_iter_num = -1
 
-    # Use "range(0, sample_args.iteration):" when willing to find the best model during training
-    # in that case uncomment line 101 and comment line 102
+    # Use "range(0, sample_args.iteration):" when willing to find the best trained model
+    # in that case uncomment line 131 and comment line 132
     # This iteration is for testing the results for different stages of the trained model
     # (the stored paramters of the model at different iterations)
     start_iteration = 0
@@ -183,10 +186,6 @@ def main():
             orig_x_seq = x_seq.clone() 
             orig_x_seq_veh = x_seq_veh.clone()
 
-            # # create the covaraince matrix using kalman filter and add it to x_seq
-            # GT_filtered_state, GT_covariance = KF_covariance_generator(x_seq, mask, dataloader.timestamp) # the last two arguments are for testing the KF with ploting the bivariate gaussian
-
-
             # grid mask calculation
             if  saved_args.method == 1: # social lstm   
                 grid_seq = getSequenceGridMask(x_seq, PedsList_seq, saved_args.neighborhood_size, saved_args.grid_size,
@@ -210,7 +209,7 @@ def main():
             x_seq, first_values_dict = position_change_seq(x_seq, PedsList_seq, lookup_seq)
 
             # create the covaraince matrix using kalman filter and add it to x_seq
-            GT_filtered_disp, GT_covariance = KF_covariance_generator(x_seq, mask, dataloader.timestamp) # the last two arguments are for testing the KF with ploting the bivariate gaussian
+            GT_filtered_disp, GT_covariance = KF_covariance_generator(x_seq, mask, dataloader.timestamp)
 
 
 
@@ -329,11 +328,11 @@ def main():
                                                                             PedsList_obs, False, lookup_seq)
                 
                 sample_ESV_sigma1_batch, sample_ESV_sigma2_batch, sample_ESV_sigma3_batch, counter = Delta_Empirical_Sigma_Value(
-                                                                                                        dist_param_seq[sample_args.obs_length:,:,:].data,
-                                                                                                        orig_x_seq[sample_args.obs_length:,:,:2].data,
-                                                                                                        PedsList_seq[sample_args.obs_length:], PedsList_obs,
-                                                                                                        False, lookup_seq)
-        
+                                                                                                dist_param_seq[sample_args.obs_length:,:,:].data,
+                                                                                                orig_x_seq[sample_args.obs_length:,:,:2].data,
+                                                                                                PedsList_seq[sample_args.obs_length:], PedsList_obs,
+                                                                                                False, lookup_seq)
+
 
                 sample_error.append(sample_error_batch)
                 sample_final_error.append(sample_final_error_batch)
@@ -432,14 +431,11 @@ def main():
         print('Iteration:' ,iteration+1,'Percentage of collision between pedestrians and vehicles of the model is ',
                                                                                      Collision_pedveh)
         # calculate the mean and std for the NLL_list
-        # check the lenght of the list. It should be 1081!
         NLL_mean, NLL_std = calculate_mean_and_std(NLL_list)
         print('Iteration:' ,iteration+1,'NLL of the model is ', NLL_mean, 'with std of ', NLL_std)
         print('Iteration:' ,iteration+1,'ESV_sigma1 of the model is ', sigma1)
         print('Iteration:' ,iteration+1,'ESV_sigma2 of the model is ', sigma2)
         print('Iteration:' ,iteration+1,'ESV_sigma3 of the model is ', sigma3)
-
-        # print('None count for MHD calculation:', None_count)
 
         # saving the informatino of all episodes on the eval dataset in a csv file
         df = pd.DataFrame({'model_num': [iteration], 'ADE': [ADE], 'FDE': [FDE], 'MHD': [MHD],
@@ -462,14 +458,6 @@ def main():
             smallest_err_iter_num = iteration
             smallest_err = total_error
 
-        # using the NLL for deciding on the best model/iteration
-        # if NLL_mean<smallest_err:
-        #     print("**********************************************************")
-        #     print('Best iteration has been changed. Previous best iteration: ', smallest_err_iter_num+1, 'Error: ',
-        #            smallest_err)
-        #     print('New best iteration : ', iteration+1, 'Error: ',NLL_mean)
-        #     smallest_err_iter_num = iteration
-        #     smallest_err = NLL_mean
     best_model_list_index = smallest_err_iter_num-start_iteration
     dataloader.write_to_plot_file(iteration_result[best_model_list_index], 
                                   os.path.join(plot_directory, plot_test_file_directory)) 
@@ -490,7 +478,7 @@ def main():
     best_iter_NLL_list = iteration_NLL_list[best_model_list_index]
     # calculate the mean and std for this list 
     NLL_mean, NLL_std = calculate_mean_and_std(best_iter_NLL_list)
-    print('NLL: ', NLL_mean, 'with std of ', NLL_std)
+    print('NLL: ', NLL_mean, '±', NLL_std)
     print('ESV_sigma1: ', iteration_ESV_sigma1[best_model_list_index])
     print('ESV_sigma2: ', iteration_ESV_sigma2[best_model_list_index])
     print('ESV_sigma3: ', iteration_ESV_sigma3[best_model_list_index])
@@ -517,14 +505,6 @@ def main():
                iteration_ESV_sigma2[best_model_list_index],
                iteration_ESV_sigma3[best_model_list_index]))
     
-    # plt.subplot(2,1,1)
-    # plt.plot(range(start_iteration,sample_args.iteration), iteration_total_error, 'b', linewidth=2.0, label="ADE")
-    # plt.ylabel("ADE")
-    # plt.subplot(2,1,2)
-    # plt.plot(range(start_iteration,sample_args.iteration), iteration_final_error, 'k', linewidth=2.0, label="FDE")
-    # plt.xlabel('epoch number of the stored trained model')
-    # plt.ylabel("FDE")
-    # plt.savefig("Store_Results/plot/test/test_error.png")
 
 
 def sample(x_seq, Pedlist, args, net, true_x_seq, true_Pedlist, saved_args, dataloader, look_up, num_pedlist, is_gru,
@@ -578,7 +558,6 @@ def sample(x_seq, Pedlist, args, net, true_x_seq, true_Pedlist, saved_args, data
             elif (args.method == 4):
                 # Do a forward prop 
                 # We give the frames one by one as input. 
-                # Unlike the training where we give the whole frames at once and it was iterated in the model
                 grid_t = grid[tstep]
                 grid_veh_in_ped_t = grid_veh_in_ped[tstep]
                 grid_TTC_t = grid_TTC[tstep]
@@ -608,12 +587,10 @@ def sample(x_seq, Pedlist, args, net, true_x_seq, true_Pedlist, saved_args, data
 
             # # Sample from the bivariate Gaussian
             # next_x, next_y = sample_gaussian_2d(mux.data, muy.data, sx.data, sy.data, corr.data, true_Pedlist[tstep], look_up)
-
             # ret_x_seq[tstep + 1, :, 0] = next_x
             # ret_x_seq[tstep + 1, :, 1] = next_y
 
-            # One could also assign the mean to the next state instead of sampling from the distrbution. 
-            # for that one should comment the above three lines and uncomment the following lines 
+            # Assign the mean to the next state. 
             next_x_mean = mux
             next_y_mean = muy
             ret_x_seq[tstep + 1, :, 0] = next_x_mean
@@ -630,12 +607,7 @@ def sample(x_seq, Pedlist, args, net, true_x_seq, true_Pedlist, saved_args, data
 
         # constructing the speed change and deviation feautres for time step obs_length-1 
         # that is going ot be used in the next for loop and also calculating that for each new time step on the following for loop
-        ret_x_seq[tstep + 1, :, 2] = x_seq[-1,:,2]
-        ret_x_seq[tstep + 1, :, 3] = x_seq[-1,:,3]
-        ret_x_seq[tstep + 1, :, 5] = x_seq[-1,:,5]
-        ret_x_seq[tstep + 1, :, 6] = x_seq[-1,:,6]
-        ret_x_seq[tstep + 1, :, 7] = x_seq[-1,:,7]
-        ret_x_seq[tstep + 1, :, 8] = x_seq[-1,:,8]
+        ret_x_seq[tstep + 1, :, 2:9] = x_seq[-1,:,2:9]
         ret_x_seq[tstep + 1, :, 9:13] = x_seq[-1,:,9:13] # covariances of the trjecotries generated by the Kalman filter
 
         last_observed_frame_prediction = ret_x_seq[tstep + 1, :, :2].clone()
@@ -654,15 +626,15 @@ def sample(x_seq, Pedlist, args, net, true_x_seq, true_Pedlist, saved_args, data
             else:
                 if (args.method == 4):
                     outputs, hidden_states, cell_states = net(ret_x_seq[tstep].view(1, numx_seq, ret_x_seq.shape[2]), [prev_grid],
-                                                               hidden_states, cell_states, [true_Pedlist[tstep]], [num_pedlist[tstep]],
-                                                                dataloader, look_up, x_seq_veh[tstep,:,:].view(1, numx_seq_veh, x_seq_veh.shape[2]), 
-                                                                [prev_grid_veh_in_ped], [Vehlist[tstep]], look_up_veh,  [prev_TTC_grid],
-                                                                [prev_TTC_grid_veh])
+                                                            hidden_states, cell_states, [true_Pedlist[tstep]], [num_pedlist[tstep]],
+                                                            dataloader, look_up, x_seq_veh[tstep,:,:].view(1, numx_seq_veh, x_seq_veh.shape[2]), 
+                                                            [prev_grid_veh_in_ped], [Vehlist[tstep]], look_up_veh,  [prev_TTC_grid],
+                                                            [prev_TTC_grid_veh])
                 elif (args.method == 1):
                      outputs, hidden_states, cell_states = net(ret_x_seq[tstep].view(1, numx_seq, ret_x_seq.shape[2]), [prev_grid.cpu()],
-                                                                hidden_states, cell_states, [true_Pedlist[tstep]], [num_pedlist[tstep]],
-                                                                dataloader, look_up, x_seq_veh[tstep,:,:].view(1, numx_seq_veh, x_seq_veh.shape[2]),
-                                                                None, [Vehlist[tstep]], look_up_veh)
+                                                            hidden_states, cell_states, [true_Pedlist[tstep]], [num_pedlist[tstep]],
+                                                            dataloader, look_up, x_seq_veh[tstep,:,:].view(1, numx_seq_veh, x_seq_veh.shape[2]),
+                                                            None, [Vehlist[tstep]], look_up_veh)
             if tstep == args.obs_length-1: 
                 # storing the actual prediction in the last observed frame position
                 ret_x_seq[args.obs_length-1, :, :2] = last_observed_frame_prediction.clone()
@@ -671,18 +643,15 @@ def sample(x_seq, Pedlist, args, net, true_x_seq, true_Pedlist, saved_args, data
             mux, muy, sx, sy, corr = getCoef(outputs.cpu())
 
             # Storing the paramteres of the distriution
-            dist_param_seq[tstep + 1, :, :] = outputs.clone() # torch.stack((mux, muy, sx, sy, corr),2) 
+            dist_param_seq[tstep + 1, :, :] = outputs.clone() 
 
             # # Sample from the bivariate Gaussian
             # next_x, next_y = sample_gaussian_2d(mux.data, muy.data, sx.data, sy.data, corr.data, true_Pedlist[tstep], look_up)
-
             # # Store the predicted position
             # ret_x_seq[tstep + 1, :, 0] = next_x
             # ret_x_seq[tstep + 1, :, 1] = next_y
 
-            # One could also assign the mean to the next state instead of sampling from the distrbution. 
-            # for that one should comment the above three lines and uncomment the following lines 
-
+            # Assign the mean to the next state. 
             next_x_mean = mux
             next_y_mean = muy
             ret_x_seq[tstep + 1, :, 0] = next_x_mean
@@ -726,7 +695,7 @@ def sample(x_seq, Pedlist, args, net, true_x_seq, true_Pedlist, saved_args, data
             converted_pedlist = [look_up[_x_seq] for _x_seq in next_ped_list]
             list_of_x_seq = Variable(torch.LongTensor(converted_pedlist))
 
-            #Get their predicted positions
+            # Get their predicted positions
             current_x_seq = torch.index_select(ret_x_seq_convert[tstep+1], 0, list_of_x_seq)
 
             if grid is not None: # not vanilla lstm
@@ -742,7 +711,8 @@ def sample(x_seq, Pedlist, args, net, true_x_seq, true_Pedlist, saved_args, data
           
             
                 if  args.method == 1: #social lstm 
-                    prev_grid = getGridMask(current_x_seq.data.cpu(), len(true_Pedlist[tstep+1]),saved_args.neighborhood_size, saved_args.grid_size) 
+                    prev_grid = getGridMask(current_x_seq.data.cpu(), len(true_Pedlist[tstep+1]),
+                                            saved_args.neighborhood_size, saved_args.grid_size) 
                   
                 elif args.method == 4: # Collision grid
                     prev_grid, prev_TTC_grid = getInteractionGridMask(current_x_seq.data.cpu(), current_x_seq.data.cpu(), saved_args.TTC,
@@ -768,24 +738,6 @@ def sample(x_seq, Pedlist, args, net, true_x_seq, true_Pedlist, saved_args, data
 
 
         return ret_x_seq, dist_param_seq
-    
-
-def calculate_mean_and_std(data):
-    """
-    Calculate the mean and standard deviation of a list of numbers.
-
-    Parameters:
-    - data: List of numbers
-
-    Returns:
-    - mean: Mean of the data
-    - std_dev: Standard deviation of the data
-    """
-
-    data = np.asarray(data)
-    mean = np.mean(data)
-    std_dev = np.std(data)
-    return mean, std_dev
 
 
 
