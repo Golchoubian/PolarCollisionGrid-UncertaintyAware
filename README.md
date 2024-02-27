@@ -42,7 +42,7 @@ Our trained models are stored in folders named relative to their corresponding m
 For the results reported in the paper, the test files are stored in the method's associated folder within the `Store_Results/plot/test` directory. These files can be utilized to run the `visualization.py` script and generate the table results in the paper by executing the `TableResults.py` file for the selected method.
 
 ## Visualization
-The predicted trajectories can be visualized for selected samples in the test set by running the `visualization.py` file. The resulting figures are stored in the `Store_Results\plot\test\plt\compare` directory.
+The predicted trajectories can be visualized for selected samples in the test set by running the `visualization.py` file. The resulting figures are stored in the `Store_Results\plot\test\plt` directory.
 
 ## Citation
 
