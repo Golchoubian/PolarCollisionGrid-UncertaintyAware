@@ -1,7 +1,7 @@
 
 import argparse
 import pickle
-from helper import *
+from utils.helper import *
 
 def main():
     
@@ -28,7 +28,7 @@ def main():
         print("====== PCG results ======")
     elif args.method == 5:
         file_path = file_path_UAWPCG
-        print("====== UAW-PCG ======")
+        print("====== UAW-PCG results ======")
     else:
         raise ValueError("Invalid method number")
     

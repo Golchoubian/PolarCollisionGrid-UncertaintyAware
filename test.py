@@ -6,11 +6,11 @@ import time
 import torch
 from torch.autograd import Variable
 
-from DataLoader import DataLoader
-from grid import getSequenceGridMask, getGridMask, getSequenceGridMask_heterogeneous, getGridMask_heterogeneous
-from Interaction import getInteractionGridMask, getSequenceInteractionGridMask
-from helper import * # want to use its get_model()
-from helper import sample_gaussian_2d
+from utils.DataLoader import DataLoader
+from utils.grid import getSequenceGridMask, getGridMask, getSequenceGridMask_heterogeneous, getGridMask_heterogeneous
+from utils.Interaction import getInteractionGridMask, getSequenceInteractionGridMask
+from utils.helper import * # want to use its get_model()
+from utils.helper import sample_gaussian_2d
 from matplotlib import pyplot as plt
 import pandas as pd
 import logging

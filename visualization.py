@@ -5,7 +5,7 @@ from matplotlib import pyplot as plt
 from scipy.stats import multivariate_normal
 import string
 from matplotlib.patches import Ellipse
-from helper import cov_mat_generation, getCoef
+from utils.helper import cov_mat_generation, getCoef
 import torch
 from mpl_toolkits.axes_grid1.inset_locator import inset_axes, mark_inset
 
