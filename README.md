@@ -1,7 +1,12 @@
 
 # Uncertinty Aware Polar Collision Grid (UAW-PCG)
 
-This repository contains the code for our paper titled "Polar Collision Grids: Effective Interaction Modelling for Pedestrian Trajectory Prediction in Shared Space Using Collision Checks",  which was published and presented at ITSC 2023. The complete paper is accessible via the [IEEE portal](https://ieeexplore.ieee.org/abstract/document/10422509) or [ArXiv](https://arxiv.org/abs/2308.06654).
+This repository contains the code for the uncertainty-aware version of the polar collision grid trajectory prediction model presented in the paper ["paper name"](arXiv address). 
+
+## Overview
+
+The presented uncertainty-aware pedestrian trajectory prediction model is based on the Polar Collision Grid (PCG) model introduced in our ITSC2023 paper. However, we have enhanced this model by training it with a novel uncertainty-aware loss function. This modification aims to improve the accuracy of predicting the covariance of future positions within the forecasted distribution. The original PCG model, trained solely with the Negative Log Likelihood loss, tends to generate overconfident predictions. To address this issue, we introduced an uncertainty-loss component which penalizes the distance of the ground truth position from the predicted distribution (Point2Dist loss). This addition has proven to enhance the performance of our model, as detailed in our paper.
+
 
 ## Setup
 
@@ -13,7 +18,6 @@ pip install -r requirements.txt
 ```
 Install pytorch version 2.2.1 using the instructions [here](https://pytorch.org/get-started/locally/)
 
-## Overview
 
 
 ## Dataset
