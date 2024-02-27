@@ -44,10 +44,8 @@ class CollisionGridModel(nn.Module):
      
 
         # The LSTM cell for pedestrians
-        # !!!!!!!!! Chang the following line's number from 3 to 2 when not including vehicles (oblation study) !!!!!!!!!!!!
         self.cell = nn.LSTMCell(3*self.embedding_size, self.rnn_size)
     
-        # !!!!!!!!! Chang the following line's number from 3 to 2 when not including vehicles (oblation study) !!!!!!!!!!!!
         if self.gru:
             self.cell = nn.GRUCell(3*self.embedding_size, self.rnn_size) 
 
@@ -225,10 +223,6 @@ class CollisionGridModel(nn.Module):
                 # adding pedestrians covariates to the input
                 nodes_current = torch.cat((nodes_current, frame[list_of_nodes,9:13]), 1) 
 
-            # print('========= frame number: ', framenum, ' =========')
-            # print('nodes_current: ', nodes_current)
-            # print('nodes_current shape: ', nodes_current.shape)
-            # print('nodes_current cov part: ', nodes_current[:,2:])
 
             # Get the corresponding grid masks
             grid_current = grids[framenum] 
