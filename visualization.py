@@ -274,9 +274,9 @@ def plot_trajecotries(true_trajectories,pred_trajectories,obs_len,batch,
 
     
     if is_train:
-        plt.savefig("Store_Results/plot/train/plt/compare/%d.png"%batch, dpi=200)
+        plt.savefig("Store_Results/plot/train/plt/%d.png"%batch, dpi=200)
     else:
-        plt.savefig("Store_Results/plot/test/plt/compare/%d.png"%batch, dpi=200)
+        plt.savefig("Store_Results/plot/test/plt/%d.png"%batch, dpi=200)
     plt.close()
 
 
