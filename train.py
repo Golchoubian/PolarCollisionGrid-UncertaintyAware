@@ -161,7 +161,12 @@ def train(args):
      # Log directory
     prefix = 'Store_Results/'
     log_directory = os.path.join(prefix, 'log/')
-    plot_directory = os.path.join(prefix, 'plot/') 
+    plot_directory = os.path.join(prefix, 'plot/train/') 
+
+    # Create the directory if it doesn't exist
+    os.makedirs(log_directory, exist_ok=True)
+    os.makedirs(plot_directory, exist_ok=True)
+
 
     # Logging files
     log_file_curve = open(os.path.join(log_directory,'log_curve.txt'), 'w+')
