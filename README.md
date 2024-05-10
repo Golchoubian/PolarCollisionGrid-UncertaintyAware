@@ -8,8 +8,8 @@ This repository contains the code for the uncertainty-aware version of the polar
 The presented uncertainty-aware pedestrian trajectory prediction model is based on the Polar Collision Grid (PCG) model introduced in our ITSC2023 paper. However, we have enhanced this model by training it with a novel uncertainty-aware loss function. This modification aims to improve the accuracy of predicting the covariance of future positions within the forecasted distribution. The original PCG model, trained solely with the Negative Log Likelihood loss, tends to generate overconfident predictions. To address this issue, we introduced an uncertainty-loss component which penalizes the mahalanobis distance of the ground truth position from the predicted distribution (Point2Dist loss). This addition has proven to enhance the performance of our model, as detailed in our paper.
 
 <div style="display: inline-block;">
-    <img src="https://github.com/Golchoubian/PolarCollisionGrid-PedestrianTrajectoryPrediction/blob/master/figure/RelatedInfo.png" alt="Related Info" width="250" hspace="50"> 
-   <img src="https://github.com/Golchoubian/PolarCollisionGrid-PedestrianTrajectoryPrediction/blob/master/figure/OveralFramework.png" alt="Overall Framework" width="400">
+    <img src="https://github.com/Golchoubian/PolarCollisionGrid-UncertaintyAware/blob/master/figure/PCG.png?raw=true" alt="PCG" width="400" hspace="50"> 
+   <img src="https://github.com/Golchoubian/PolarCollisionGrid-UncertaintyAware/blob/master/figure/UAW-PCG.png?raw=true" alt="UAW-PCG" width="400">
 </div>
 
 
