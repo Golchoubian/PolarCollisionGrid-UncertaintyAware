@@ -14,12 +14,12 @@ The presented uncertainty-aware pedestrian trajectory prediction model is based 
 
 <div style="text-align: center;">
     <figure style="display: inline-block;">
-        <img src="https://github.com/Golchoubian/PolarCollisionGrid-UncertaintyAware/blob/master/figure/PCG.png?raw=true" alt="PCG" width="400" hspace="10">
-        <figcaption>PCG</figcaption>
+        <figcaption>PCG:</figcaption>
+        <img src="https://github.com/Golchoubian/PolarCollisionGrid-UncertaintyAware/blob/master/figure/PCG.png?raw=true" alt="PCG" width="350" hspace="0">     
     </figure>
     <figure style="display: inline-block;">
-        <img src="https://github.com/Golchoubian/PolarCollisionGrid-UncertaintyAware/blob/master/figure/UAW-PCG.png?raw=true" alt="UAW-PCG" width="400">
-        <figcaption>UAW-PCG</figcaption>
+        <figcaption>UAW-PCG:</figcaption>
+        <img src="https://github.com/Golchoubian/PolarCollisionGrid-UncertaintyAware/blob/master/figure/UAW-PCG.png?raw=true" alt="UAW-PCG" width="350">
     </figure>
 </div>
 
