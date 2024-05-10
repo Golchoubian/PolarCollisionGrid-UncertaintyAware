@@ -12,14 +12,23 @@ The presented uncertainty-aware pedestrian trajectory prediction model is based 
    <img src="https://github.com/Golchoubian/PolarCollisionGrid-UncertaintyAware/blob/master/figure/UAW-PCG.png?raw=true" alt="UAW-PCG" width="400">
 </div>
 
+<div style="text-align: center;">
+    <figure style="display: inline-block;">
+        <img src="https://github.com/Golchoubian/PolarCollisionGrid-UncertaintyAware/blob/master/figure/PCG.png?raw=true" alt="PCG" width="400" hspace="10">
+        <figcaption>PCG</figcaption>
+    </figure>
+    <figure style="display: inline-block;">
+        <img src="https://github.com/Golchoubian/PolarCollisionGrid-UncertaintyAware/blob/master/figure/UAW-PCG.png?raw=true" alt="UAW-PCG" width="400">
+        <figcaption>UAW-PCG</figcaption>
+    </figure>
+</div>
+
 
 
 ## Setup
 
-Create a conda environmnet using python version 3.9, and install the required python packages
+Create a virtual environmnet using python version 3.9, and install the required python packages
 ```bash
-conda create --name PCG python=3.9
-conda activate PCG
 pip install -r requirements.txt
 ```
 Install pytorch version 2.2.1 using the instructions [here](https://pytorch.org/get-started/locally/)
