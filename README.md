@@ -1,7 +1,7 @@
 
 # Uncertinty Aware Polar Collision Grid (UAW-PCG)
 
-This repository contains the code for the uncertainty-aware version of the polar collision grid trajectory prediction model presented in the paper ["Uncertainty-Aware DRL for Autonomous Vehicle Crowd Navigation in Shared Space"](arXiv address). 
+This repository contains the code for the uncertainty-aware version of the polar collision grid trajectory prediction model presented in the paper ["Uncertainty-Aware DRL for Autonomous Vehicle Crowd Navigation in Shared Space"](https://arxiv.org/abs/2405.13969). 
 
 ## Overview
 
