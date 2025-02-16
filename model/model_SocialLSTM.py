@@ -24,7 +24,10 @@ class SocialModel(nn.Module):
             self.seq_length = 2 
         else:
             # Training time
-            self.seq_length = args.seq_length
+            if args.teacher_forcing:
+                self.seq_length = args.seq_length
+            else:
+                self.seq_length = 2
 
         # Store required sizes
         self.rnn_size = args.rnn_size
@@ -155,7 +158,7 @@ class SocialModel(nn.Module):
             # nodes_current_veh = input_data_veh[framenum,list_of_nodes_veh,5:7]
            
             # Get the corresponding grid masks
-            grid_current = grids[framenum] 
+            grid_current = grids[framenum].cpu() 
             # grid_current_veh = grids_veh[framenum]             
 
 
