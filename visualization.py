@@ -64,11 +64,11 @@ def plot_trajecotries(true_trajectories,pred_trajectories,obs_len,batch,
     # min_y = 25
     # max_y = 45
 
-    # scenario 874
-    min_x = 43
-    max_x = 66
-    min_y = 27 # 26
-    max_y = 50 # 49
+    # # scenario 874
+    # min_x = 43
+    # max_x = 66
+    # min_y = 27 # 26
+    # max_y = 50 # 49
 
     # # scenario 871
     # min_x = 42.5
@@ -130,54 +130,54 @@ def plot_trajecotries(true_trajectories,pred_trajectories,obs_len,batch,
                   c='r', linestyle = (0,(1,0.7)), linewidth=2)
 
 
-        zoomed_ped_id = 3
-        if agent_index == zoomed_ped_id: 
-            # ============ zoomed in plot ============
-            # Define the inset axis position
-            ax_inset = inset_axes(ax, width='35%', height='35%', loc='upper left') 
+        # zoomed_ped_id = 3
+        # if agent_index == zoomed_ped_id: 
+        #     # ============ zoomed in plot ============
+        #     # Define the inset axis position
+        #     ax_inset = inset_axes(ax, width='35%', height='35%', loc='upper left') 
 
-            # Plot the zoomed-in data
-            for f in pred_frame_nums:
-                marker_size = min_size + ((max_size-min_size)/seq_len * f)
-                mean = dist_param_seq[f,agent_index,:2]
-                cov = cov_matrix[f,agent_index]
-                plot_bivariate_gaussian3(mean, cov, ax_inset, 1)
-            ax_inset.plot(pred_trajectories[pred_frame_nums,agent_index,0], 
-                        pred_trajectories[pred_frame_nums,agent_index,1],
-                        c='r', linestyle = (0,(1,0.7)), linewidth=2.5,
-                        label='Zoomed In')
+        #     # Plot the zoomed-in data
+        #     for f in pred_frame_nums:
+        #         marker_size = min_size + ((max_size-min_size)/seq_len * f)
+        #         mean = dist_param_seq[f,agent_index,:2]
+        #         cov = cov_matrix[f,agent_index]
+        #         plot_bivariate_gaussian3(mean, cov, ax_inset, 1)
+        #     ax_inset.plot(pred_trajectories[pred_frame_nums,agent_index,0], 
+        #                 pred_trajectories[pred_frame_nums,agent_index,1],
+        #                 c='r', linestyle = (0,(1,0.7)), linewidth=2.5,
+        #                 label='Zoomed In')
 
-            # observed traj
-            ax_inset.plot(true_trajectories[obs_frame_nums,agent_index,0],
-                           true_trajectories[obs_frame_nums,agent_index,1],
-                            c='g', linewidth=2.0, alpha=alpha_val, ls='--')
-            # ground truth predcition
-            ax_inset.plot(true_trajectories[pred_frame_nums,agent_index,0], 
-                           true_trajectories[pred_frame_nums,agent_index,1],
-                            c='0.0', linewidth=2.0, alpha=alpha_val, ls='-')
-            # current position
-            ax_inset.plot(true_trajectories[frame_i, agent_index,0],
-                           true_trajectories[frame_i, agent_index,1], 
-                            color='k', marker="*", markersize=6)
+        #     # observed traj
+        #     ax_inset.plot(true_trajectories[obs_frame_nums,agent_index,0],
+        #                    true_trajectories[obs_frame_nums,agent_index,1],
+        #                     c='g', linewidth=2.0, alpha=alpha_val, ls='--')
+        #     # ground truth predcition
+        #     ax_inset.plot(true_trajectories[pred_frame_nums,agent_index,0], 
+        #                    true_trajectories[pred_frame_nums,agent_index,1],
+        #                     c='0.0', linewidth=2.0, alpha=alpha_val, ls='-')
+        #     # current position
+        #     ax_inset.plot(true_trajectories[frame_i, agent_index,0],
+        #                    true_trajectories[frame_i, agent_index,1], 
+        #                     color='k', marker="*", markersize=6)
             
-            # sceanrio 874
-            ax_inset.set_xlim(50.5, 51.8)  # Set x-axis range
-            ax_inset.set_ylim(37.7, 39)  # Set y-axis range
+        #     # sceanrio 874
+        #     ax_inset.set_xlim(50.5, 51.8)  # Set x-axis range
+        #     ax_inset.set_ylim(37.7, 39)  # Set y-axis range
             
-            # # sceanrio 871
-            # ax_inset.set_xlim(50.5, 51.5)  # Set x-axis range
-            # ax_inset.set_ylim(38, 39)  # Set y-axis range
-            # # # sceanrio 871 whole cov
-            # # ax_inset.set_xlim(50, 52.5)  # Set x-axis range
-            # # ax_inset.set_ylim(36, 40.5)  # Set y-axis range
+        #     # # sceanrio 871
+        #     # ax_inset.set_xlim(50.5, 51.5)  # Set x-axis range
+        #     # ax_inset.set_ylim(38, 39)  # Set y-axis range
+        #     # # # sceanrio 871 whole cov
+        #     # # ax_inset.set_xlim(50, 52.5)  # Set x-axis range
+        #     # # ax_inset.set_ylim(36, 40.5)  # Set y-axis range
 
-            # Remove the axes labels in the zoomed-in plot
-            ax_inset.set_xticks([])
-            ax_inset.set_yticks([])
-            ax_inset.set_xlabel('')
-            ax_inset.set_ylabel('')
-            # Mark the area of the inset in the main plot
-            mark_inset(ax, ax_inset, loc1=3, loc2=1, fc="none", ec="0.5")
+        #     # Remove the axes labels in the zoomed-in plot
+        #     ax_inset.set_xticks([])
+        #     ax_inset.set_yticks([])
+        #     ax_inset.set_xlabel('')
+        #     ax_inset.set_ylabel('')
+        #     # Mark the area of the inset in the main plot
+        #     mark_inset(ax, ax_inset, loc1=3, loc2=1, fc="none", ec="0.5")
 
       
     max_size_veh = 6
@@ -329,7 +329,7 @@ def main():
 
     file_path_PCG = "Store_Results/plot/test/PCG/test_results.pkl"
     file_path_UAWPCG = "Store_Results/plot/test/UAWPCG/test_results.pkl"
-    file_path = file_path_UAWPCG # file_path_PCG OR file_path_UAWPCG
+    file_path = "Store_Results/plot/test/test_results.pkl" # file_path_PCG OR file_path_UAWPCG
 
    
     try:
@@ -341,7 +341,7 @@ def main():
 
     print("====== The total number of data in the test set is: " + str(len(results)) + ' ========')
 
-    for i  in [874]: # range(0, len(results), 10): # plotting the samples in the test set
+    for i  in range(0, len(results), 10): # plotting the samples in the test set
 
         results_i = results[i]
         true_trajectories = results_i[0]
